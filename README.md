@@ -38,7 +38,13 @@ In fact, the values to provide are:
 - **Private Key password** : the password for the PKCS12 container
 - **Client Certificate file** : The certificate in PEM format
 
-The PKCS12 container can be dumped with:
+If the key is not provided in the PKCS12 container, then the following error is logged:
+
+```text
+ERROR! IIC2037E: Caught exception when trying to load the client certificate and key from C:\...\clientCertificate.crt and C:\...\clientCertificate.key respectively, for datasource /Source/xxx. stream does not represent a PKCS12 key store
+```
+
+The PKCS12 container (with both the key and certificate) can be dumped with:
 
 ```bash
 openssl pkcs12 -info -in build/clientCertificate.p12 -nodes -password pass:_pass_here_
