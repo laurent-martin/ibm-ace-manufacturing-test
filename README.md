@@ -16,23 +16,40 @@ The communication can be either un-encrypted (for tests only) or encrypted, but 
 
 ## ACE: Configuration
 
-In some cases, the `Create Data Source` button in the ACE manufacturing view stays greyed out.
-
-In this case:
-
-1. Make sure you have created a data source in the folder above the data source properties, and that it is selected.
-
-2. If that persists, close the toolkit, and restart. Eventually, the button shall be black.
-
 ### Without Encryption
 
 For testing purpose only, it is possible to register a server without encryption and authentication.
 In this case, select `None` for both `Message Security` Mode and `Security Policy`
 No certificate shall be configured for this mode, but the server shall be configured to support it.
 
-### Client Certificate
+### Generation of client certificate
 
 In production, Security will be used, this requires certificates on both the client and server.
+
+The [ACE documentation](https://www.ibm.com/docs/en/app-connect/12.0?topic=source-generating-self-signed-ssl-certificate)
+provides the steps to generate a self-signed certificate.
+
+A Makefile is provided here to generate a simple self-signed certificate in the required format following the manual steps.
+
+First initialize the config, execute `make`
+
+This creates the folder `private` and file `private/config.env`
+
+Edit this file and fill specific information:
+
+```bash
+CLIENT_ADDRESS=192.168.0.100
+SERVER_ADDRESS=192.168.0.101
+PASSPHRASE=_your_passphrase_here_
+```
+
+Then generate the certificate and key:
+
+```bash
+make
+```
+
+Generated files are located in folder `build`.
 
 ### Comments on documentation
 
@@ -62,29 +79,15 @@ The PKCS12 container (with both the key and certificate) can be dumped with:
 openssl pkcs12 -info -in build/clientCertificate.p12 -nodes -password pass:_pass_here_
 ```
 
-### Generation of client certificate
+## Issue: create button greyed out
 
-A Makefile is provided here to generate a simple self-signed certificate in the required format.
+In some cases, the `Create Data Source` button in the ACE manufacturing view stays greyed out.
 
-First initialize, execute `make`
+In this case:
 
-This creates the folder `private` and file `private/config.env`
+1. Make sure you have created a data source in the folder above the data source properties, and that it is selected.
 
-Edit this file and fill specific information:
-
-```bash
-CLIENT_ADDRESS=192.168.0.100
-SERVER_ADDRESS=192.168.0.101
-PASSPHRASE=_your_passphrase_here_
-```
-
-Then generate the certificate and private key as specified in the [ACE documentation](https://www.ibm.com/docs/en/app-connect/12.0?topic=source-generating-self-signed-ssl-certificate):
-
-```bash
-make
-```
-
-Generated files are located in folder `build`.
+2. If that persists, close the toolkit, and restart. Eventually, the button shall be black.
 
 ### Server certificate
 
