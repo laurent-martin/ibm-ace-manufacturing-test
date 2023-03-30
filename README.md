@@ -22,6 +22,12 @@ For testing purpose only, it is possible to register a server without encryption
 In this case, select `None` for both `Message Security` Mode and `Security Policy`
 No certificate shall be configured for this mode, but the server shall be configured to support it.
 
+- **Message Security Mode** : None
+- **Security Policy** : None
+- **Client Private Key file** : leave empty
+- **Private Key password** : leave empty
+- **Client Certificate file** : leave empty
+
 ### Generation of client certificate
 
 In production, Security will be used, this requires certificates on both the client and server.
@@ -50,6 +56,12 @@ make
 ```
 
 Generated files are located in folder `build`.
+
+- **Message Security Mode** : SignAndEncrypt
+- **Security Policy** : Basic256Sha256
+- **Client Private Key file** : clientCertificate.p12
+- **Private Key password** : the password for the PKCS12 container
+- **Client Certificate file** : clientCertificate.key
 
 ### Comments on documentation
 
@@ -126,15 +138,8 @@ make deploy
 
 The startup script is provider for convenience: `start_opc.sh`
 
-The configuration in this startup script allows connection from client using either:
-
-- Message Security Mode = SignAndEncrypt
-- Security Policy = Basic256Sha256
-
-or
-
-- Message Security Mode = None
-- Security Policy = None
+The configuration in this startup script allows connection from client using both with and without encryption.
+(option `--unsecuretransport`)
 
 ### Note on server generated self signed certificate
 
