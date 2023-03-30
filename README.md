@@ -38,6 +38,12 @@ In fact, the values to provide are:
 - **Private Key password** : the password for the PKCS12 container
 - **Client Certificate file** : The certificate in PEM format
 
+The PKCS12 container can be dumped with:
+
+```bash
+openssl pkcs12 -info -in build/clientCertificate.p12 -nodes -password pass:_pass_here_
+```
+
 #### Generation
 
 A Makefile is provided here to generate a simple self-signed certificate in the required format.
