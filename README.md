@@ -12,6 +12,8 @@ The communication can be either un-encrypted (for tests only) or encrypted, but 
 
 ![ACEmfg](images/ACEmfg.png)
 
+[Nice IBM Performance Report here](https://www.ibm.com/support/pages/ibm-app-connect-manufacturing-v20-performance-reports).
+
 ## ACE: Configuration
 
 In some cases, the `Create Data Source` button in the ACE manufacturing view stays greyed out.
