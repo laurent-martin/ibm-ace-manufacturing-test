@@ -1,0 +1,19 @@
+# https://www.ibm.com/docs/en/app-connect/12.0?topic=source-generating-self-signed-ssl-certificate
+[ req ]
+default_bits       = 4096
+distinguished_name = req_distinguished_name
+req_extensions     = req_ext
+prompt = no
+
+[ req_distinguished_name ]
+countryName                 = FR
+stateOrProvinceName         = utopia
+localityName                = here
+organizationName            = ibm
+commonName                  = $param_fqdn
+
+[ req_ext ]
+subjectAltName   = DNS.1:$param_fqdn,URI:urn:$param_fqdn:OPCUA:acmfgclient
+extendedKeyUsage = serverAuth, clientAuth
+basicConstraints = CA:FALSE
+keyUsage         = nonRepudiation, digitalSignature, keyEncipherment, dataEncipherment
