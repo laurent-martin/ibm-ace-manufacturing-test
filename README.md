@@ -93,6 +93,18 @@ make deploy
 
 The startup script is provider for convenience: `start_opc.sh`
 
+The configuration in this startup script allows connection from client using either:
+
+- Message Security Mode = SignAndEncrypt
+- Security Policy = Basic256Sha256
+
+or
+
+- Message Security Mode = None
+- Security Policy = None
+
+### Note on server generated self signed certificate
+
 Note that the server runs in the container, which has a hostname defaulting to the container id.
 So default certificates would be generated with that changing hostname.
 And this will make subsequent start fail due to the changing name.
