@@ -10,7 +10,17 @@ The communication can be either un-encrypted (for tests only) or encrypted, but 
 
 > **Note:** The Makefile is intended to be run on a Unix-like system (macOS, Linux)
 
+![ACEmfg](images/ACEmfg.png)
+
 ## ACE: Configuration
+
+In some cases, the `Create Data Source` button in the ACE manufacturing view stays greyed out.
+
+In this case:
+
+1. Make sure you have created a data source in the folder above the data source properties, and that it is selected.
+
+2. If that persists, close the toolkit, and restart. Eventually, the button shall be black.
 
 ### Without Encryption
 
