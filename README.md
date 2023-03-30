@@ -32,7 +32,7 @@ No certificate shall be configured for this mode, but the server shall be config
 
 In production, Security will be used, this requires certificates on both the client and server.
 
-#### Comments
+### Comments on documentation
 
 A few comments on the ACE documentation:
 
@@ -60,7 +60,7 @@ The PKCS12 container (with both the key and certificate) can be dumped with:
 openssl pkcs12 -info -in build/clientCertificate.p12 -nodes -password pass:_pass_here_
 ```
 
-#### Generation
+### Generation of client certificate
 
 A Makefile is provided here to generate a simple self-signed certificate in the required format.
 
@@ -83,6 +83,12 @@ make
 ```
 
 Generated files are located in folder `build`.
+
+### Server certificate
+
+The ACE OPCUA client allows (for testing) to accept the server certificate manually:
+
+![accept cert](images/accept.png)
 
 ## OPC PLC server: Some details
 
