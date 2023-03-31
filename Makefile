@@ -14,6 +14,9 @@ include $(PRIVATEDIR)/config.env
 
 all: $(CERTFILEP12)
 
+init:
+	@echo Done.
+
 clean:
 	rm -fr $(OUTDIR)
 

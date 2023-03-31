@@ -18,9 +18,13 @@ The communication can be either un-encrypted (for tests only) or encrypted, but 
 
 ### Without Encryption
 
-For testing purpose only, it is possible to register a server without encryption and authentication.
-In this case, select `None` for both `Message Security` Mode and `Security Policy`
-No certificate shall be configured for this mode, but the server shall be configured to support it.
+For testing purpose **only**, it is possible to register a server without encryption and authentication.
+This is much simpler than using certificates.
+
+> **Note:** The configuration of the startup script `start_opc.sh` allows connection from client without encryption.
+(option `--unsecuretransport`)
+
+ACE Configuration:
 
 - **Message Security Mode** : None
 - **Security Policy** : None
@@ -35,9 +39,14 @@ In production, Security will be used, this requires certificates on both the cli
 The [ACE documentation](https://www.ibm.com/docs/en/app-connect/12.0?topic=source-generating-self-signed-ssl-certificate)
 provides the steps to generate a self-signed certificate.
 
-A Makefile is provided here to generate a simple self-signed certificate in the required format following the manual steps.
+A `Makefile` is provided here to generate a simple self-signed certificate in the required format.
+It simply follows the manual steps described in the documentation.
 
-First initialize the config, execute `make`
+First initialize the config, execute:
+
+```bash
+make init
+```
 
 This creates the folder `private` and file `private/config.env`
 
@@ -57,11 +66,13 @@ make
 
 Generated files are located in folder `build`.
 
-- **Message Security Mode** : SignAndEncrypt
-- **Security Policy** : Basic256Sha256
-- **Client Private Key file** : clientCertificate.p12
-- **Private Key password** : the password for the PKCS12 container
-- **Client Certificate file** : clientCertificate.key
+Copy files: `build/clientCertificate.crt` and `build/clientCertificate.p12` to the ACE workspace.
+
+- **Message Security Mode** : `SignAndEncrypt`
+- **Security Policy** : `Basic256Sha256`
+- **Client Private Key file** : `[path to workspace]/clientCertificate.p12`
+- **Private Key password** : the password used for the PKCS12 container
+- **Client Certificate file** : `[path to workspace]/clientCertificate.key`
 
 ### Comments on documentation
 
@@ -71,7 +82,7 @@ A few comments on the ACE documentation:
 - The documentation provides the steps to generate those. (used in the script)
 - The documentation talks about "[PEM](https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail)" format for both.
 - The method proposed in documentation shows a PKCS12 container is generated.
-- The UI tells, for the key: Client Private Key in pem file (BASE64)
+- The UI tells, for the key: **Client Private Key in pem file (BASE64)**
 
 In fact, the values to provide are:
 
@@ -82,10 +93,10 @@ In fact, the values to provide are:
 If the key is not provided in the PKCS12 container, then the following error is logged:
 
 ```text
-ERROR! IIC2037E: Caught exception when trying to load the client certificate and key from C:\...\clientCertificate.crt and C:\...\clientCertificate.key respectively, for datasource /Source/xxx. stream does not represent a PKCS12 key store
+ERROR! IIC2037E: Caught exception when trying to load the client certificate and key from C:\...\clientCertificate.crt and C:\...\clientCertificate.key respectively, for data source /Source/xxx. stream does not represent a PKCS12 key store
 ```
 
-The PKCS12 container (with both the key and certificate) can be dumped with:
+The content of the PKCS12 container (with both the key and certificate) can be displayed with:
 
 ```bash
 openssl pkcs12 -info -in build/clientCertificate.p12 -nodes -password pass:_pass_here_
@@ -103,7 +114,7 @@ In this case:
 
 ### Server certificate
 
-The ACE OPCUA client allows (for testing) to accept the server certificate manually:
+The ACE OPC UA client allows (for testing) to accept the server certificate manually:
 
 ![accept cert](images/accept.png)
 
@@ -115,20 +126,37 @@ We use here the [OPC PLC server](https://github.com/Azure-Samples/iot-edge-opc-p
 The current working directory in the container is : `/app`, as can be seen in the log:
 
 ```text
-[16:10:16 INF] Current directory: /app
-[16:10:16 INF] Log file: /app/818f92dc8d1f-plc.log
-[16:10:16 INF] Log level: info
-[16:10:16 INF] OpcPlc v2.8.2 starting up ...
+[INF] Current directory: /app
+...
+[INF] Application Certificate store path is: pki/own
+...
+[INF] Trusted Issuer Certificate store path is: pki/issuer
+...
+[INF] Trusted Peer Certificate store path is: pki/trusted
+...
+[INF] Rejected Certificate store path is: pki/rejected
 ```
 
-So the script sets this variable: `container_app_folder`
+So, the default folders used in the container are:
 
-The default sub folder that stores PKI files is: `pki`, so the script maps this folder to keep persistency: `container_pki_folder`
+```text
+/app
+   /pki
+      /own
+      /issuer
+      /trusted
+      /rejected
+```
 
-If no server certificate is provided, the server generates a self signed certificate containing the hostname (of the container, so we fix the value).
+If no server certificate is provided, the server generates a self signed certificate containing the hostname (of the container, so we fix the hostname value on container startup) in `/app/pki/own`.
 
-Also, we configure the server to accept the client certificate: copy the crt file (certificate PEM file) to the folder: `pki` which is shared with the container.
-The startup script is given the path to the client certificate to add it to the trusted store.
+On the podman host, in the user's home, we create a folder `pki` and copy the file `clientCertificate.crt` in it.
+
+When the container is started, a volume is created to map this `pki` folder in the user's home to the `/app/pki` folder in the container.
+
+The simulator is given the path to the client certificate (in the container) to add it to the trusted store.
+
+This is automated here (copy startup script and certificate to podman host):
 
 ```bash
 make deploy
@@ -138,8 +166,7 @@ make deploy
 
 The startup script is provider for convenience: `start_opc.sh`
 
-The configuration in this startup script allows connection from client using both with and without encryption.
-(option `--unsecuretransport`)
+Several parameters are provided to allow unencrypted use, trust of client cert, fix the container hostname.
 
 ### Note on server generated self signed certificate
 
@@ -148,3 +175,5 @@ So default certificates would be generated with that changing hostname.
 And this will make subsequent start fail due to the changing name.
 So we fix the container host name, so that the generated server certificate can be re-used.
 (in case we need it on the client side).
+
+<!-- cspell:ignore PKCS unsecuretransport -->
