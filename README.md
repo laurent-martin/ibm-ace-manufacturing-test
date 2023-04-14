@@ -1,4 +1,7 @@
 # Testing the IBM Manufacturing pack for IBM App Connect Enterprise
+<!-- cspell:ignore PKCS unsecuretransport -->
+
+Ref: <https://github.ibm.com/client-engineering-france/mvp-lyfe-datacoll>
 
 IBM ACE is also available with an extension supporting the [OPC UA](https://en.wikipedia.org/wiki/OPC_Unified_Architecture) interface, as a client.
 
@@ -102,23 +105,25 @@ The content of the PKCS12 container (with both the key and certificate) can be d
 openssl pkcs12 -info -in build/clientCertificate.p12 -nodes -password pass:_pass_here_
 ```
 
-## Issue: create button greyed out
+## Issue: "Create Data Source" button greyed out
 
 In some cases, the `Create Data Source` button in the ACE manufacturing view stays greyed out.
 
 In this case:
 
-1. Make sure you have created a data source in the folder above the data source properties, and that it is selected.
+1. Make sure you have created a data source in the folder above the data source properties, and that it is selected. Or un-select, and then select it again.
 
 2. If that persists, close the toolkit, and restart. Eventually, the button shall be black.
 
-### Server certificate
+### Server certificate on client
 
 The ACE OPC UA client allows (for testing) to accept the server certificate manually:
 
 ![accept cert](images/accept.png)
 
-## OPC PLC server: Some details
+## OPC PLC server
+
+### Installation of client certificate
 
 In order to simulate the manufacturing side, a simulator can be used.
 We use here the [OPC PLC server](https://github.com/Azure-Samples/iot-edge-opc-plc).
@@ -162,18 +167,37 @@ This is automated here (copy startup script and certificate to podman host):
 make deploy
 ```
 
-## Server startup
+### Startup
 
 The startup script is provider for convenience: `start_opc.sh`
 
 Several parameters are provided to allow unencrypted use, trust of client cert, fix the container hostname.
 
-### Note on server generated self signed certificate
+### Server certificate
 
-Note that the server runs in the container, which has a hostname defaulting to the container id.
-So default certificates would be generated with that changing hostname.
-And this will make subsequent start fail due to the changing name.
-So we fix the container host name, so that the generated server certificate can be re-used.
+Upon startup, the server will generate a self-signed certificate if none is already provided.
+
+The server runs in the container, which has a hostname defaulting to the container id.
+The CN of the certificate is generated with the hostname, but that hostname changes upon each start of the container (container id), this will make subsequent start fail due to the changing name.
+A solution is to fix fix the container host name, so that the generated server certificate can be re-used.
 (in case we need it on the client side).
 
-<!-- cspell:ignore PKCS unsecuretransport -->
+## Integration Server
+
+The integration server (or node) needs to be equipped with the ACMfg jar.
+This is described in the documentation.
+Edit `server.conf.yaml`, and configure like this (e.g on Windows):
+
+```yaml
+ConnectorProviders:
+  ACMfg:
+    connectorClassName: 'com.ibm.industrypack.industryclient.connector.ICConnectorFactory'
+    jarsURL: 'C:/Program Files/IBM/ACMfg/3.0.1.1/runtime/amd64_nt_4'
+    property1: 'trustCertificate=true;isHA=false'
+```
+
+> **Note:** Update the jar path accordingly to the actual version installed.
+
+The property: `trustCertificate=true` means that an unknown certificate from a server will be automatically added to the list of accepted certificates.
+
+The server must also be configured with the client certificate:

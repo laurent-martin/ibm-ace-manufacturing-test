@@ -1,10 +1,14 @@
 # Makefile
 
-OUTDIR=build
+# configuration is placed here
 PRIVATEDIR=private
+
+# generated files are placed here
+OUTDIR=build
+
 CERTNAME=clientCertificate
 CSRFILE=$(OUTDIR)/$(CERTNAME).csr
-SSLCONF=$(OUTDIR)/ssl.conf
+SSLCONF=$(OUTDIR)/$(CERTNAME).conf
 PRIVKEYFILE=$(OUTDIR)/$(CERTNAME).key
 CERTFILEPEM=$(OUTDIR)/$(CERTNAME).crt
 CERTFILEP12=$(OUTDIR)/$(CERTNAME).p12
