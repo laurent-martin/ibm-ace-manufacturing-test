@@ -1,3 +1,4 @@
 .vscode
 build
 private
+.DS_Store

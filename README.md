@@ -2,21 +2,27 @@
 <!-- cspell:ignore PKCS unsecuretransport -->
 ## General
 
+![ACEmfg](images/ACEmfg.png)
+
 Ref: <https://github.ibm.com/client-engineering-france/mvp-lyfe-datacoll>
 
-IBM ACE is also available with an extension supporting the [OPC UA](https://en.wikipedia.org/wiki/OPC_Unified_Architecture) interface, as a client.
+IBM ACE is available with an extension supporting the [OPC UA](https://en.wikipedia.org/wiki/OPC_Unified_Architecture) interface, as a client.
 
 For testing purpose an OPC UA server (generating samples) is needed.
-
 We can use the OPC PLC server.
 
 The communication can be either un-encrypted (for tests only) or encrypted, but in that case X509 certificates must be put in place (both sides).
 
-> **Note:** The Makefile is intended to be run on a Unix-like system (macOS, Linux)
+![linux](https://www.ibm.com/docs/en/module_1666066400127/images/flag_linux.png)
+![unix](https://www.ibm.com/docs/en/module_1666066400127/images/flag_unix.png)
 
-![ACEmfg](images/ACEmfg.png)
+> **Note:** The `Makefile` is intended to be run on a Unix-like system (macOS, Linux)
 
-[Nice IBM Performance Report here](https://www.ibm.com/support/pages/ibm-app-connect-manufacturing-v20-performance-reports).
+![windows](https://www.ibm.com/docs/en/module_1666066400127/images/flag_win.png)
+
+In the following sections, `$HOME` refers to `%USERPROFILE%` on Windows.
+
+A [IBM Performance Report](https://www.ibm.com/support/pages/ibm-app-connect-manufacturing-v20-performance-reports) for ACMfg is available.
 
 ## Security and Encryption
 
@@ -57,7 +63,10 @@ Then generate the certificate and key:
 make
 ```
 
-Generated files are located in folder `build`.
+Generated files are located in folder `build`:
+
+- `clientCertificate.p12` : Private key and certificate protected by a password in a PKCS12 container.
+- `clientCertificate.crt` : The certificate alone in PEM format.
 
 ### Comments on ACMfg documentation
 
@@ -150,15 +159,38 @@ A solution is to fix fix the container host name, so that the generated server c
 
 ## ACE Manufacturing
 
-### Configuration without Encryption
+ACMfg provides a manufacturing view with the following tabs:
 
-For testing purpose **only**, it is possible to register a server without encryption and authentication.
+- `DataSources`
+- `DataSource Properties`
+- `Logging`
+- `Source Items`
+- `Client Item Value`
+- `Select`
+- `Client Items`
+- `Client Item Properties`
+
+### Creation of data source
+
+In the `DataSources` tab is located the root source, named `Source`. This name can be changed.
+
+Sources can be configured in a hierarchical manner, i.e. sub nodes can be created under the root node or another node.
+
+Then any source node can be configured with a server connection: select the source and enter configuration in the `DataSource Properties` tab.
+
+![sources](images/sources.png)
+
+Sources configured with a server get a blue icon.
+
+### Configuration of DataSource without Encryption
+
+For testing purpose **only**, it is possible to register a source server without encryption and authentication.
 This is much simpler than using certificates.
 
 > **Note:** The configuration of the startup script `start_opc.sh` allows connection from client without encryption.
 (option `--unsecuretransport`)
 
-ACE Configuration:
+DataSource Properties:
 
 - **Message Security Mode** : None
 - **Security Policy** : None
@@ -166,9 +198,9 @@ ACE Configuration:
 - **Private Key password** : leave empty
 - **Client Certificate file** : leave empty
 
-### Configuration with Encryption
+### Configuration of DataSource with Encryption
 
-Copy files: `build/clientCertificate.crt` and `build/clientCertificate.p12` to the ACE workspace.
+Copy the generated files: `build/clientCertificate.crt` and `build/clientCertificate.p12` to the ACE workspace.
 
 ACE Configuration:
 
@@ -181,6 +213,8 @@ ACE Configuration:
 The main folder for ACMfg is: `$HOME/.acmfg`
 
 Upon configuration, the following file is generated: `$HOME/.acmfg/mappings/datasources.json`
+
+> **Note:** Take a note of the data source mappingPath, e.g. `/Source/test7`: it will be needed later on to populate the vault with the PKCS12 password. It is the value of field `mappingPath` in `datasources.json`, noted `<source mappingPath>`.
 
 ### Issue: "Create Data Source" button greyed out
 
@@ -200,46 +234,48 @@ The ACE OPC UA client allows (for testing) to accept the server certificate manu
 
 ### Preparation of mapping nodes
 
-The manufacturing view provides the following windows:
+In the manufacturing view, follow these steps:
 
-- `DataSources`
-- `DataSource Properties`
-- `Logging`
-- `Source Items`
-- `Client Item Value`
-- `Select`
-- `Client Items`
-- `Client Item Properties`
+| Window Tab               | Action                          |
+|--------------------------|---------------------------------|
+| `DataSources`            | Select the data source          |
+| `DataSource Properties`  | Check that it is properly configured and connected. Click on `Refresh Source Item Tree` |
+| `Source Items`           | Check that items were retrieved.                                           |
+| `Client Items`           | Select the element `Item`: it is the root item (it can be renamed).        |
+| `Source Items`           | Navigate to Objects&rarr;OpcPlc&rarr;Telemetry. Select either a full section, or a list of source items, or a single item. |
+| `Client Item Properties` | The button `Create Client Item Tree` becomes available (multiple selections), or `Create Client Item` (single selection). Click on the available button. |
+| `Client Items`           | Note that items are now mapped. |
 
-In the manufacturing view:
+![mapping](images/mapping.png)
 
-- Select the data source on top left
-- Check that it is properly configured and connected
-- Click on `Refresh Source Item Tree`
-- Note that the window `Client Items` contains one element `Item`: it is the root item, it can also be renamed. Select it.
-- in the `Source Items` tree, navigate to Objects&rarr;OpcPlc&rarr;Telemetry
-- select either a full section, or a list of source items, or a single item.
-- upon selection, the button `Create Client Item Tree` becomes available (multiple selections), or `Create Client Item` (single selection)
-- Click on `Create Client Item Tree`: this will import the selected items from the list of available items into the selected (root) item.
+Upon configuration, the following file is generated: `$HOME/.acmfg/mappings/mapping_851eeb72-f996-4af4-8d63-d55c586c2826.json`
 
 ### Flow creation
 
-As specified in the documentation, create one flow with control nodes:
+As specified in the documentation, create one flow with both control nodes:
 
 ![control nodes](images/control.png)
 
-And a simple collection flow can be:
+And a simple input flow can be:
 
 ![simple flow](images/simple_flow.png)
 
 To select sources for the OPC-UA-Input node follow this:
 
 - in the connector configuration click on `Add`, this switches to the manufacturing view
+- in `Client Items` select the desired items
+- in `Select`, button `Add Trigger Item` is activated, click on it
+- Eclipse switches back to the designer view.
 
 ## Integration Server
 
+Create an Integration Server.
+For example in the toolkit (development): in this case also create the vault with a password.
+
+### ACMfg jars
+
 The integration server (or node) needs to be equipped with the ACMfg jar.
-This is described in the documentation.
+This is described in the [documentation](https://www.ibm.com/docs/en/app-connect/12.0?topic=tasks-configuring-integration-server).
 Edit `server.conf.yaml`, and configure like this (e.g on Windows):
 
 ```yaml
@@ -254,4 +290,46 @@ ConnectorProviders:
 
 The property: `trustCertificate=true` means that an unknown certificate from a server will be automatically added to the list of accepted certificates.
 
-The server must also be configured with the client certificate:
+### Vault and secrets
+
+The integration server also needs the certificate and private key.
+A vault must be used.
+If the vault was not created when the IntegrationServer was created using toolkit, or of the IntegrationServer is remote.
+
+See [documentation](https://www.ibm.com/docs/en/app-connect/12.0?topic=server-configuring-vault-enabled-integration)
+
+The vault is created in the IntegrationServer work dir: `<workdirectory>/config/vault/store.yaml`
+
+![windows](https://www.ibm.com/docs/en/module_1666066400127/images/flag_win.png)
+
+Open an ACE Console.
+
+Example of workdir of IntegrationServer: `$HOME/IBM/ACET12/workspace/TEST_SERVER3`
+
+![linux](https://www.ibm.com/docs/en/module_1666066400127/images/flag_linux.png)
+![unix](https://www.ibm.com/docs/en/module_1666066400127/images/flag_unix.png)
+
+On Unix-like systems, open a terminal.
+
+```bash
+mqsivault --work-dir <workdirectory> --create --vault-key <vaultkeyname>
+```
+
+Build the `<credentialname>` like this: `<source mappingPath>/acmfgPrivateKeyUser`, e.g. `/Source/test7/acmfgPrivateKeyUser`
+
+> **Note:** The username parameter is not used.
+
+```bash
+mqsicredentials --work-dir <workdirectory> --vault-key <vaultkeyname> --create --credential-type ldap --credential-name <credentialname> --username not_used --password <PKCS12 password>
+```
+
+When the IntegrationServer is started it will look for that password based on `<source mappingPath>`.
+
+The data source server information is read from `$HOME/.acmfg`, including the certificate, private key.
+
+### Starting the integration server in a container
+
+> **TODO**
+
+The idea here is to use the pre-built ACE container, and provide ACMfg jars in the mounted volume.
+Alternatively a new container image could be built.
