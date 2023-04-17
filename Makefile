@@ -16,12 +16,14 @@ CERTFILEP12=$(OUTDIR)/$(CERTNAME).p12
 # get specific info from this file
 include $(PRIVATEDIR)/config.env
 
-all: $(CERTFILEP12)
+all:: $(CERTFILEP12)
+
+all:: README.pdf
 
 init:
 	@echo Done.
 
-clean:
+clean::
 	rm -fr $(OUTDIR)
 
 $(PRIVKEYFILE):
@@ -56,3 +58,16 @@ deploy:
 	scp $(CERTFILEPEM) $(SERVER_ADDRESS):pki
 	scp start_opc.sh $(SERVER_ADDRESS):
 	ssh $(SERVER_ADDRESS) chmod a+x start_opc.sh
+
+%.pdf: %.md
+	pandoc \
+		--standalone --from=gfm --to=pdf --pdf-engine=xelatex \
+		--resource-path=.. --toc --number-sections \
+		--shift-heading-level-by=-1 \
+		--variable=include-before:'\newpage' --variable=documentclass:report \
+		--variable=date:$$(date '+%Y/%m/%d') --variable=author:'Laurent MARTIN' \
+		--variable=mainfont:Arial --variable=urlcolor:blue --variable=geometry:margin=15mm \
+		-o $@ $<
+
+clean::
+	rm -f README.pdf

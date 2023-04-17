@@ -1,5 +1,6 @@
 # Testing the IBM Manufacturing pack for IBM App Connect Enterprise
 <!-- cspell:ignore PKCS unsecuretransport -->
+## General
 
 Ref: <https://github.ibm.com/client-engineering-france/mvp-lyfe-datacoll>
 
@@ -17,25 +18,14 @@ The communication can be either un-encrypted (for tests only) or encrypted, but 
 
 [Nice IBM Performance Report here](https://www.ibm.com/support/pages/ibm-app-connect-manufacturing-v20-performance-reports).
 
-## ACE: Configuration
+## Security and Encryption
 
-### Without Encryption
+### Generation of Client Certificate
 
-For testing purpose **only**, it is possible to register a server without encryption and authentication.
-This is much simpler than using certificates.
+The OPCUA protocol requires mutual authentication and supports encryption.
+Optionally, for tests, clear transmission can be used.
 
-> **Note:** The configuration of the startup script `start_opc.sh` allows connection from client without encryption.
-(option `--unsecuretransport`)
-
-ACE Configuration:
-
-- **Message Security Mode** : None
-- **Security Policy** : None
-- **Client Private Key file** : leave empty
-- **Private Key password** : leave empty
-- **Client Certificate file** : leave empty
-
-### Generation of client certificate
+Prior to configuring the ACMfg, one needs to generate a certificate.
 
 In production, Security will be used, this requires certificates on both the client and server.
 
@@ -69,15 +59,7 @@ make
 
 Generated files are located in folder `build`.
 
-Copy files: `build/clientCertificate.crt` and `build/clientCertificate.p12` to the ACE workspace.
-
-- **Message Security Mode** : `SignAndEncrypt`
-- **Security Policy** : `Basic256Sha256`
-- **Client Private Key file** : `[path to workspace]/clientCertificate.p12`
-- **Private Key password** : the password used for the PKCS12 container
-- **Client Certificate file** : `[path to workspace]/clientCertificate.key`
-
-### Comments on documentation
+### Comments on ACMfg documentation
 
 A few comments on the ACE documentation:
 
@@ -105,28 +87,12 @@ The content of the PKCS12 container (with both the key and certificate) can be d
 openssl pkcs12 -info -in build/clientCertificate.p12 -nodes -password pass:_pass_here_
 ```
 
-## Issue: "Create Data Source" button greyed out
-
-In some cases, the `Create Data Source` button in the ACE manufacturing view stays greyed out.
-
-In this case:
-
-1. Make sure you have created a data source in the folder above the data source properties, and that it is selected. Or un-select, and then select it again.
-
-2. If that persists, close the toolkit, and restart. Eventually, the button shall be black.
-
-### Server certificate on client
-
-The ACE OPC UA client allows (for testing) to accept the server certificate manually:
-
-![accept cert](images/accept.png)
-
-## OPC PLC server
-
-### Installation of client certificate
+## OPC PLC simulator server
 
 In order to simulate the manufacturing side, a simulator can be used.
 We use here the [OPC PLC server](https://github.com/Azure-Samples/iot-edge-opc-plc).
+
+### Installation of client certificate
 
 The current working directory in the container is : `/app`, as can be seen in the log:
 
@@ -181,6 +147,94 @@ The server runs in the container, which has a hostname defaulting to the contain
 The CN of the certificate is generated with the hostname, but that hostname changes upon each start of the container (container id), this will make subsequent start fail due to the changing name.
 A solution is to fix fix the container host name, so that the generated server certificate can be re-used.
 (in case we need it on the client side).
+
+## ACE Manufacturing
+
+### Configuration without Encryption
+
+For testing purpose **only**, it is possible to register a server without encryption and authentication.
+This is much simpler than using certificates.
+
+> **Note:** The configuration of the startup script `start_opc.sh` allows connection from client without encryption.
+(option `--unsecuretransport`)
+
+ACE Configuration:
+
+- **Message Security Mode** : None
+- **Security Policy** : None
+- **Client Private Key file** : leave empty
+- **Private Key password** : leave empty
+- **Client Certificate file** : leave empty
+
+### Configuration with Encryption
+
+Copy files: `build/clientCertificate.crt` and `build/clientCertificate.p12` to the ACE workspace.
+
+ACE Configuration:
+
+- **Message Security Mode** : `SignAndEncrypt`
+- **Security Policy** : `Basic256Sha256`
+- **Client Private Key file** : `[path to workspace]/clientCertificate.p12`
+- **Private Key password** : the password used for the PKCS12 container
+- **Client Certificate file** : `[path to workspace]/clientCertificate.key`
+
+The main folder for ACMfg is: `$HOME/.acmfg`
+
+Upon configuration, the following file is generated: `$HOME/.acmfg/mappings/datasources.json`
+
+### Issue: "Create Data Source" button greyed out
+
+In some cases, the `Create Data Source` button in the ACE manufacturing view stays greyed out.
+
+In this case:
+
+1. Make sure you have created a data source in the folder above the data source properties, and that it is selected. Or un-select, and then select it again.
+
+2. If that persists, close the toolkit, and restart. Eventually, the button shall be black.
+
+### Server certificate on client
+
+The ACE OPC UA client allows (for testing) to accept the server certificate manually:
+
+![accept cert](images/accept.png)
+
+### Preparation of mapping nodes
+
+The manufacturing view provides the following windows:
+
+- `DataSources`
+- `DataSource Properties`
+- `Logging`
+- `Source Items`
+- `Client Item Value`
+- `Select`
+- `Client Items`
+- `Client Item Properties`
+
+In the manufacturing view:
+
+- Select the data source on top left
+- Check that it is properly configured and connected
+- Click on `Refresh Source Item Tree`
+- Note that the window `Client Items` contains one element `Item`: it is the root item, it can also be renamed. Select it.
+- in the `Source Items` tree, navigate to Objects&rarr;OpcPlc&rarr;Telemetry
+- select either a full section, or a list of source items, or a single item.
+- upon selection, the button `Create Client Item Tree` becomes available (multiple selections), or `Create Client Item` (single selection)
+- Click on `Create Client Item Tree`: this will import the selected items from the list of available items into the selected (root) item.
+
+### Flow creation
+
+As specified in the documentation, create one flow with control nodes:
+
+![control nodes](images/control.png)
+
+And a simple collection flow can be:
+
+![simple flow](images/simple_flow.png)
+
+To select sources for the OPC-UA-Input node follow this:
+
+- in the connector configuration click on `Add`, this switches to the manufacturing view
 
 ## Integration Server
 
