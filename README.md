@@ -327,9 +327,130 @@ When the IntegrationServer is started it will look for that password based on `<
 
 The data source server information is read from `$HOME/.acmfg`, including the certificate, private key.
 
-### Starting the integration server in a container
-
-> **TODO**
+## ACE: Starting the integration server in a container
 
 The idea here is to use the pre-built ACE container, and provide ACMfg jars in the mounted volume.
-Alternatively a new container image could be built.
+(Alternatively a new container image could be built.)
+
+First, create a configuration file :
+
+```bash
+make conf_ace
+```
+
+Get your `entitlement_key` from [My IBM Product Services](https://myibm.ibm.com/products-services/containerlibrary)
+
+Edit the file: `private/config_container.sh` and place your entitlement key and a secret for the IntegrationServer vault.
+
+Deploy that to the VM where the container will be started:
+
+```bash
+make deploy_ace
+```
+
+Then, on the VM where podman will be used, load the tools:
+
+```bash
+for s in ace_container_{config,tools}.sh;do source $s;done
+```
+
+Login to IBM image repository
+
+```bash
+podman login cp.icr.io -u cp --password-stdin <<< $entitlement_key
+```
+
+### Work directory: Creation
+
+- [Ref.: ACE Doc.: mqsicreateworkdir](https://www.ibm.com/docs/en/app-connect/12.0?topic=commands-mqsicreateworkdir-command)
+
+Since we will mount an empty folder from the host, we must initialize the work directory for the Integration server using `mqsicreateworkdir`:
+
+```bash
+mkdir -p $host_work_directory
+chmod 777 $host_work_directory
+mqsicreateworkdir $container_work_directory
+```
+
+### Vault: Creation
+
+- [Ref.: Youtube: Storing encrypted security credentials in a vault](https://www.youtube.com/watch?v=x78V_8k1P-M)
+- [Ref.: ACE Doc.: mqsivault](https://www.ibm.com/docs/en/app-connect/12.0?topic=commands-mqsivault-command)
+- [Ref.: ACE Doc.: mqsicredentials](https://www.ibm.com/docs/en/app-connect/12.0?topic=commands-mqsicredentials-command)
+
+Two commands are used:
+
+- `mqsivault` : create a vault
+- `mqsicredentials` : manage credentials in vault
+
+Let's create an empty vault in the `IntegrationServer` work dir:
+
+```bash
+mqsivault --work-dir $container_work_directory --create --vault-key $vault_key
+```
+
+> **Note:** Any operation on vault **can** be done while `IntegrationServer` is stopped. When `IntegrationServer` is stopped the vault key **must** be provided on command line (option `--vault-key $vault_key`).
+>
+> **Note:** Some operations **must** be done while `IntegrationServer` is stopped: Creation of vault, deletion of entry.
+>
+> **Note:** Some operations on vault **can** be done while `IntegrationServer` is running: List entries, Add entry. When `IntegrationServer` is running the vault key is not needed on command line: Requests are made through the `IntegrationServer`.
+
+### ACE: Add Private Key password
+
+Credentials (username/password, and sometimes client id and secret) are sensitive pieces of information.
+A good practice is to store them in a safe location.
+ACE provides several ways to store credentials:
+
+| provider          | description                                   |
+|-------------------|-----------------------------------------------|
+| vault             | in an encrypted vault                         |
+| servercredentials | statically in the server's configuration file |
+| setdbparms        | in a parameter storage                        |
+
+Use the same command as previously with local server:
+
+```bash
+mqsicredentials \
+--work-dir $container_work_directory \
+--vault-key $vault_key \
+--create \
+--credential-type ldap \
+--credential-name $source_path/acmfgPrivateKeyUser \
+--username not_used \
+--password "$pkcs12_key"
+```
+
+### ACE: Start container
+
+- [Ref.: ACE Doc.: IntegrationServer command](https://www.ibm.com/docs/en/app-connect/12.0?topic=commands-integrationserver-command)
+
+Several ports are to be published to allow access to the Integration Server:
+
+| port  | Usage                                      |
+|-------|--------------------------------------------|
+| 7600  | Integration server web and management port |
+| 7700  | Integration server debug port              |
+| 7800  | Integration server user API port           |
+| 7843  | Integration server port with TLS           |
+
+```bash
+podman run \
+--detach \
+--name aceserver \
+--env LICENSE=accept \
+--publish 7600:7600 \
+--publish 7700:7700 \
+--publish 7800:7800 \
+--publish 7843:7843 \
+--volume $host_work_directory:$container_work_directory \
+--entrypoint=bash \
+$ace_image \
+-l -c \
+"IntegrationServer --work-dir $container_work_directory --vault-key $vault_key"
+```
+
+> **Note:** The container default entry point is overridden to allow additional arguments to be passed to the integration server (e.g. vault key).
+(It could also be provided through an environment variable, but not all options are available in env vars.)
+>
+> **Note:** The vault key may also be provided through an env var, or through a RC file. (Refer to the `IntegrationServer` manual)
+

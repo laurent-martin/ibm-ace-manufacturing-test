@@ -18,7 +18,7 @@ include $(PRIVATEDIR)/config.env
 
 all:: $(CERTFILEP12)
 
-all:: README.pdf
+doc: README.pdf
 
 init:
 	@echo Done.
@@ -45,6 +45,7 @@ $(CERTFILEP12): $(CERTFILEPEM) $(PRIVKEYFILE)
 # create config template
 template:
 	sed 's/=.*/=_your_value_here_/' < $(PRIVATEDIR)/config.env > config.tmpl
+	sed 's/_key=.*/_key=_your_value_here_/' < $(PRIVATEDIR)/ace_container_config.sh > ace_container_config.tmpl.sh
 
 # generate initial empty config from template
 $(PRIVATEDIR)/config.env:
@@ -71,3 +72,13 @@ deploy:
 
 clean::
 	rm -f README.pdf
+
+$(PRIVATEDIR)/ace_container_config.sh:
+	mkdir -p $(PRIVATEDIR)
+	@if test -e $(PRIVATEDIR)/ace_container_config.sh;then echo 'ERROR: conf file already exists: $@';exit 1;fi
+	sed 's/=.*/=_fill_here_/' < ace_container_config.tmpl.sh > $@
+
+conf_ace: $(PRIVATEDIR)/ace_container_config.sh
+
+deploy_ace: $(PRIVATEDIR)/ace_container_config.sh
+	scp $(PRIVATEDIR)/ace_container_config.sh ace_container_tools.sh $(SERVER_ADDRESS):
