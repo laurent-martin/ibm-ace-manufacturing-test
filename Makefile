@@ -4,34 +4,30 @@
 PRIVATEDIR=private
 
 # generated files are placed here
-OUTDIR=build
+OUTDIR=generated
 
-CERTNAME=clientCertificate
-CSRFILE=$(OUTDIR)/$(CERTNAME).csr
-SSLCONF=$(OUTDIR)/$(CERTNAME).conf
-PRIVKEYFILE=$(OUTDIR)/$(CERTNAME).key
-CERTFILEPEM=$(OUTDIR)/$(CERTNAME).crt
-CERTFILEP12=$(OUTDIR)/$(CERTNAME).p12
+CSRFILE=$(OUTDIR)/$(cert_name).csr
+SSLCONF=$(OUTDIR)/$(cert_name).conf
+PRIVKEYFILE=$(OUTDIR)/$(cert_name).key
+CERTFILEPEM=$(OUTDIR)/$(cert_pem)
+CERTFILEP12=$(OUTDIR)/$(cert_p12)
 
 # get specific info from this file
-include $(PRIVATEDIR)/config.env
+include $(OUTDIR)/configuration.mak
 
 all:: $(CERTFILEP12)
 
-doc: README.pdf
-
-init:
+init: $(PRIVATEDIR)/configuration.env
 	@echo Done.
 
 clean::
 	rm -fr $(OUTDIR)
 
 $(PRIVKEYFILE):
-	mkdir -p $(OUTDIR)
 	openssl genrsa -out $(PRIVKEYFILE) 4096
 
 $(SSLCONF): ssl.tmpl
-	param_fqdn=$(CLIENT_ADDRESS) envsubst < ssl.tmpl > $(SSLCONF)
+	param_fqdn=$(development_address) envsubst < ssl.tmpl > $(SSLCONF)
 
 $(CSRFILE): $(PRIVKEYFILE) $(SSLCONF)
 	openssl req -new -sha256 -out $(CSRFILE) -key $(PRIVKEYFILE) -config $(SSLCONF)
@@ -40,25 +36,27 @@ $(CERTFILEPEM): $(PRIVKEYFILE) $(CSRFILE)
 	openssl x509 -req -sha256 -days 365 -in $(CSRFILE) -signkey $(PRIVKEYFILE) -out $(CERTFILEPEM) -extensions req_ext -extfile $(SSLCONF)
 
 $(CERTFILEP12): $(CERTFILEPEM) $(PRIVKEYFILE)
-	openssl pkcs12 -password pass:"$(PASSPHRASE)" -export -in $(CERTFILEPEM) -inkey $(PRIVKEYFILE) -out $(CERTFILEP12)
+	openssl pkcs12 -password pass:"$(pkcs12_key)" -export -in $(CERTFILEPEM) -inkey $(PRIVKEYFILE) -out $(CERTFILEP12)
 
 # create config template
 template:
-	sed 's/=.*/=_your_value_here_/' < $(PRIVATEDIR)/config.env > config.tmpl
-	sed 's/_key=.*/_key=_your_value_here_/' < $(PRIVATEDIR)/ace_container_config.sh > ace_container_config.tmpl.sh
+	sed -Ee 's/(_key|_address)=.*/\1=_your_value_here_/' < $(PRIVATEDIR)/configuration.env > configuration.tmpl.env
 
 # generate initial empty config from template
-$(PRIVATEDIR)/config.env:
+$(PRIVATEDIR)/configuration.env:
 	mkdir -p $(PRIVATEDIR)
-	test ! -e $(PRIVATEDIR)/config.env
-	sed 's/=.*/=_fill_here_/' < config.tmpl > $(PRIVATEDIR)/config.env
+	@if test -e $(PRIVATEDIR)/configuration.env;then echo 'ERROR: conf file already exists: $@';exit 1;fi
+	sed 's/=.*/=_fill_here_/' < configuration.tmpl.env > $@
+$(OUTDIR)/configuration.mak: $(PRIVATEDIR)/configuration.env
+	mkdir -p $(OUTDIR)
+	sed 's/{/(/g;s/}/)/g' < $< > $@
 
 # send script to opc simulator
-deploy:
-	ssh $(SERVER_ADDRESS) mkdir -p pki/{issuer,trusted}
-	scp $(CERTFILEPEM) $(SERVER_ADDRESS):pki
-	scp start_opc.sh $(SERVER_ADDRESS):
-	ssh $(SERVER_ADDRESS) chmod a+x start_opc.sh
+deploy_opcplc:
+	ssh $(opcua_server_address) mkdir -p pki/{issuer,trusted}
+	scp $(CERTFILEPEM) $(opcua_server_address):pki
+	scp start_opc.sh $(opcua_server_address):
+	ssh $(opcua_server_address) chmod a+x start_opc.sh
 
 %.pdf: %.md
 	pandoc \
@@ -70,15 +68,26 @@ deploy:
 		--variable=mainfont:Arial --variable=urlcolor:blue --variable=geometry:margin=15mm \
 		-o $@ $<
 
+doc: README.pdf
+
 clean::
 	rm -f README.pdf
 
-$(PRIVATEDIR)/ace_container_config.sh:
-	mkdir -p $(PRIVATEDIR)
-	@if test -e $(PRIVATEDIR)/ace_container_config.sh;then echo 'ERROR: conf file already exists: $@';exit 1;fi
-	sed 's/=.*/=_fill_here_/' < ace_container_config.tmpl.sh > $@
+# Create a simplified archive
+$(OUTDIR)/ACMfg_runtime.tar.gz: $(PRIVATEDIR)/ACMfg_linux_amd64_$(acmfg_version)_developer.tar.gz
+	tar zxvf $(PRIVATEDIR)/ACMfg_linux_amd64_$(acmfg_version)_developer.tar.gz ACMfg-$(acmfg_version)/runtime/amd64_linux_2
+	rm -fr ACMfg_runtime
+	mv ACMfg-$(acmfg_version)/runtime/amd64_linux_2 ACMfg_runtime
+	tar -zcvf $@ --no-xattrs ACMfg_runtime
+	rm -fr ACMfg-$(acmfg_version) ACMfg_runtime
 
-conf_ace: $(PRIVATEDIR)/ace_container_config.sh
-
-deploy_ace: $(PRIVATEDIR)/ace_container_config.sh
-	scp $(PRIVATEDIR)/ace_container_config.sh ace_container_tools.sh $(SERVER_ADDRESS):
+deploy_ace: $(CERTFILEP12) $(PRIVATEDIR)/configuration.env $(OUTDIR)/ACMfg_runtime.tar.gz
+	runtime_folder=$(container_work_directory)/ACMfg_runtime envsubst < server.conf.tmpl.yaml > $(OUTDIR)/server.conf.yaml
+	scp \
+		$(PRIVATEDIR)/configuration.env \
+		ace_container_tools.sh \
+		$(CERTFILEPEM) \
+		$(CERTFILEP12) \
+		$(OUTDIR)/ACMfg_runtime.tar.gz \
+		$(OUTDIR)/server.conf.yaml \
+		$(ace_server_address):

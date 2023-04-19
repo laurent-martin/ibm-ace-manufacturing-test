@@ -1,0 +1,9 @@
+---
+ConnectorProviders:
+  ACMfg:
+    jarsURL: '$runtime_folder'
+    connectorClassName: 'com.ibm.industrypack.industryclient.connector.ICConnectorFactory'
+    property1: 'trustCertificate=true;isHA=false'
+EnvironmentVariables:
+  ACMFG_MAPPING_FILES_DIR: '$runtime_folder'
+  USE_DATABASE: false
