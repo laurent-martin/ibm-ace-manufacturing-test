@@ -267,17 +267,13 @@ To select sources for the OPC-UA-Input node follow this:
 - in `Select`, button `Add Trigger Item` is activated, click on it
 - Eclipse switches back to the designer view.
 
-### Policy
+## ACE: Starting the development `IntegrationServer` in the toolkit
 
-TODO
-
-## ACE: Starting the development IntegrationServer in the toolkit
-
-Create an IntegrationServer in the toolkit: Set a password for the Vault (same as in `configuration.env`).
+Create an `IntegrationServer` in the toolkit: Set a password for the Vault (same as in `configuration.env`).
 
 ### ACMfg jars
 
-The IntegrationServer (or node) needs to be equipped with the ACMfg jar.
+The `IntegrationServer` (or node) needs to be equipped with the ACMfg jar.
 This is described in the [documentation](https://www.ibm.com/docs/en/app-connect/12.0?topic=tasks-configuring-integration-server).
 Edit `server.conf.yaml`, and configure like this (e.g on Windows):
 
@@ -297,20 +293,20 @@ The property: `trustCertificate=true` means that an unknown certificate from a s
 
 ### Vault and secrets
 
-The IntegrationServer also needs the certificate and private key.
+The `IntegrationServer` also needs the certificate and private key.
 A vault can be used.
-If the vault was not created when the IntegrationServer was created using toolkit, then it can also be created subsequently.
-The IntegrationServer must be shutdown to create the vault.
+If the vault was not created when the `IntegrationServer` was created using toolkit, then it can also be created subsequently.
+The `IntegrationServer` must be shutdown to create the vault.
 
 See [documentation](https://www.ibm.com/docs/en/app-connect/12.0?topic=server-configuring-vault-enabled-integration)
 
-The vault is created in the IntegrationServer work dir: `<workdirectory>/config/vault/store.yaml`
+The vault is created in the `IntegrationServer` work dir: `<workdirectory>/config/vault/store.yaml`
 
 ![windows](https://www.ibm.com/docs/en/module_1666066400127/images/flag_win.png)
 
 Open an ACE Console.
 
-Example of workdir of IntegrationServer: `$HOME/IBM/ACET12/workspace/TEST_SERVER`
+Example of workdir of `IntegrationServer`: `$HOME/IBM/ACET12/workspace/TEST_SERVER`
 
 ![linux](https://www.ibm.com/docs/en/module_1666066400127/images/flag_linux.png)
 ![unix](https://www.ibm.com/docs/en/module_1666066400127/images/flag_unix.png)
@@ -333,17 +329,17 @@ mqsicredentials --work-dir <workdirectory> --vault-key <vaultkeyname> --create -
 
 > **Note:** The `username` parameter is not used.
 
-When the IntegrationServer is started it will look for that password based on `$source_mapping_path`.
+When the `IntegrationServer` is started it will look for that password based on `$source_mapping_path`.
 
 TODO: Change: The data source server information is read from `$HOME/.acmfg`, including the certificate, private key.
 
-## ACE: Starting the IntegrationServer in a container using the pre-built image
+## ACE: Starting the `IntegrationServer` in a container using the pre-built image
 
 The idea here is to use the pre-built ACE container, and provide ACMfg jars in the mounted volume.
 
 Get your `entitlement_key` from [My IBM Product Services](https://myibm.ibm.com/products-services/containerlibrary)
 
-Edit the file: `private/configuration.env` and place your entitlement key and a secret for the IntegrationServer vault.
+Edit the file: `private/configuration.env` and place your entitlement key and a secret for the `IntegrationServer` vault.
 This is needed to pull the image.
 
 Deploy that to the VM where the container will be started:
@@ -369,12 +365,12 @@ podman login cp.icr.io -u cp --password-stdin <<< $entitlement_key
 
 - [Ref.: ACE Doc.: mqsicreateworkdir](https://www.ibm.com/docs/en/app-connect/12.0?topic=commands-mqsicreateworkdir-command)
 
-Since we will mount an empty folder from the host, we must initialize the work directory for the IntegrationServer using `mqsicreateworkdir`:
+Since we will mount an empty folder from the host, we must initialize the work directory for the `IntegrationServer` using `mqsicreateworkdir`:
 
 ```bash
-mkdir -p $host_work_directory
-chmod 777 $host_work_directory
-mqsicreateworkdir $container_work_directory
+mkdir -p $ace_container_work_directory
+chmod 777 $ace_container_work_directory
+mqsicreateworkdir $ace_container_work_directory
 ```
 
 ### Vault: Creation
@@ -391,7 +387,7 @@ Two commands are used:
 Let's create an empty vault in the `IntegrationServer` work dir:
 
 ```bash
-mqsivault --work-dir $container_work_directory --create --vault-key $vault_key
+mqsivault --work-dir $ace_container_work_directory --create --vault-key $vault_key
 ```
 
 > **Note:** Any operation on vault **can** be done while `IntegrationServer` is stopped. When `IntegrationServer` is stopped the vault key **must** be provided on command line (option `--vault-key $vault_key`).
@@ -412,11 +408,11 @@ ACE provides several ways to store credentials:
 | servercredentials | statically in the server's configuration file |
 | setdbparms        | in a parameter storage                        |
 
-Use the same command as previously with local server:
+Use the same command as previously with local server to create the credential in the Vault:
 
 ```bash
 mqsicredentials \
---work-dir $container_work_directory \
+--work-dir $ace_container_work_directory \
 --vault-key $vault_key \
 --create \
 --credential-type ldap \
@@ -437,39 +433,49 @@ On the remote server:
 
 ```bash
 sudo tar -zxvf ACMfg_runtime.tar.gz --directory=ace_workdir
-sudo cp cp server.conf.yaml ace_workdir/overrides/
+sudo cp server.conf.yaml ace_workdir/overrides/
 ```
 
-### ACE: Start container
+### Policies to override parameters
 
-- [Ref.: ACE Doc.: IntegrationServer command](https://www.ibm.com/docs/en/app-connect/12.0?topic=commands-integrationserver-command)
+The location of the certificates for the OPCUA input node is copied from the data source JSON into the flow node configuration.
+This can be found in the XML description of the flow (`data.msgflow`).
+In order to override this value it is possible to [use a policy](https://www.ibm.com/docs/en/app-connect/12.0?topic=policies-overriding-data-source-configuration-properties).
 
-Several ports are to be published to allow access to the IntegrationServer:
+Proceed as follows:
 
-| port  | Usage                                      |
-|-------|--------------------------------------------|
-| 7600  | IntegrationServer web and management port |
-| 7700  | IntegrationServer debug port              |
-| 7800  | IntegrationServer user API port           |
-| 7843  | IntegrationServer port with TLS           |
+- Create a policy project, e.g. in the toolkit, here we use: `ContainerDeployment`
+- Create a policy with the name equal to the name of the source.
+  Not the path, but just the name of the source itself (node in tree). In case of doubt look at file `datasources.json`: it is the value of the field `"name"`. The name of the default source is `Source`
+- Set the policy type to `User Defined`, and create two keys: `SECURITY_CLIENT_CERT` and `SECURITY_CLIENT_PRIV_KEY` with the path to those files inside the container.
+- To tell the `IntegrationServer` to use this policy project, you can set the default policy project in `overrides/server.conf.yaml`.
+  The generated file here sets that value to `ContainerDeployment`.
+
+
+### ACE: Create and Start container
+
+- [Ref.: ACE Doc.: `IntegrationServer` command](https://www.ibm.com/docs/en/app-connect/12.0?topic=commands-`IntegrationServer`-command)
+
+Several ports are to be published to allow access to the `IntegrationServer`:
+
+| port  | Usage                      |
+|-------|----------------------------|
+| 7600  | REST Administration port   |
+| 7700  | debug port                 |
+| 7800  | user API port HTTP         |
+| 7843  | user API port HTTPS        |
+
+The function `create_container_ace` from `ace_container_tools.sh` is used:
 
 ```bash
-podman run \
---detach \
---name $ace_container_name \
---env LICENSE=accept \
---publish 7600:7600 \
---publish 7700:7700 \
---publish 7800:7800 \
---publish 7843:7843 \
---volume $host_work_directory:$container_work_directory \
---entrypoint=bash \
-$ace_image \
--l -c \
-"IntegrationServer --work-dir $container_work_directory --vault-key $vault_key"
+create_container_ace
+
+podman start aceserver
+
+podman logs -f aceserver
 ```
 
-> **Note:** The container default entry point is overridden to allow additional arguments to be passed to the IntegrationServer (e.g. vault key).
+> **Note:** The container default entry point is overridden to allow additional arguments to be passed to the `IntegrationServer` (e.g. vault key).
 (It could also be provided through an environment variable, but not all options are available in env vars.)
 >
-> **Note:** The vault key may also be provided through an env var, or through a RC file. (Refer to the `IntegrationServer` manual)
+> **Note:** The vault key is provided on the command line but can also be provided through an env var, or through a RC file. (Refer to the `IntegrationServer` manual)
