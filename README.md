@@ -1,5 +1,6 @@
 # IBM App Connect Enterprise Manufacturing pack
-<!-- cspell:ignore PKCS unsecuretransport -->
+<!-- cspell:ignore PKCS unsecuretransport opcua opcplc acmfg industrypack industryclient datasources userprofile setdbparms workdir msgflow aceserver -->
+<!-- cSpell:ignoreRegExp /mqsi[^ ]+/g  -->
 ## General
 
 ![ACEmfg](images/ACEmfg.png)
@@ -300,7 +301,7 @@ The `IntegrationServer` must be shutdown to create the vault.
 
 See [documentation](https://www.ibm.com/docs/en/app-connect/12.0?topic=server-configuring-vault-enabled-integration)
 
-The vault is created in the `IntegrationServer` work dir: `<workdirectory>/config/vault/store.yaml`
+The vault is created in the `IntegrationServer` work dir: `[work_directory]/config/vault/store.yaml`
 
 ![windows](https://www.ibm.com/docs/en/module_1666066400127/images/flag_win.png)
 
@@ -316,15 +317,15 @@ On Unix-like systems, open a terminal.
 On Windows or Unix-like:
 
 ```bash
-mqsivault --work-dir <workdirectory> --create --vault-key <vaultkeyname>
+mqsivault --work-dir [work_directory] --create --vault-key [vault_key_name]
 ```
 
-Build the `<credentialname>` like this: `$source_mapping_path/acmfgPrivateKeyUser`, e.g. `/Source/acmfgPrivateKeyUser`
+Build the `[credential_name]` like this: `$source_mapping_path/acmfgPrivateKeyUser`, e.g. `/Source/acmfgPrivateKeyUser`
 
 Add the credential to the Vault:
 
 ```bash
-mqsicredentials --work-dir <workdirectory> --vault-key <vaultkeyname> --create --credential-type ldap --credential-name <credentialname> --username not_used --password <PKCS12 password>
+mqsicredentials --work-dir [work_directory] --vault-key [vault_key_name] --create --credential-type ldap --credential-name [credential_name] --username not_used --password [PKCS12_password]
 ```
 
 > **Note:** The `username` parameter is not used.
@@ -402,11 +403,11 @@ Credentials (username/password, and sometimes client id and secret) are sensitiv
 A good practice is to store them in a safe location.
 ACE provides several ways to store credentials:
 
-| provider          | description                                   |
-|-------------------|-----------------------------------------------|
-| vault             | in an encrypted vault                         |
-| servercredentials | statically in the server's configuration file |
-| setdbparms        | in a parameter storage                        |
+| provider          | description                                   | doc |
+|-------------------|-----------------------------------------------|-----|
+| servercredentials | server.conf.yaml        | [doc](https://www.ibm.com/docs/en/app-connect/12.0?topic=cis-configuring-security-credentials-independent-integration-server-in-serverconfyaml-file) default and override |
+| setdbparms        | in a parameter storage  | can be played with file setdbparms.txt |
+| vault             | in an encrypted vault   |
 
 Use the same command as previously with local server to create the credential in the Vault:
 
@@ -423,24 +424,34 @@ mqsicredentials \
 
 ### ACE: Add ACMfg
 
-Send generated files:
+This make target will:
+
+- generate the `server.conf.yaml` from the template
+- send files to the integration server in user's home
 
 ```bash
 make deploy_ace
 ```
 
-On the remote server:
+On the remote server, in user's home:
 
 ```bash
-sudo tar -zxvf ACMfg_runtime.tar.gz --directory=ace_workdir
-sudo cp server.conf.yaml ace_workdir/overrides/
+source configuration.env
+sudo ./deploy_acmfg.sh
 ```
+
+This copies the following in the shared folder with container:
+
+- server.conf.yaml
+- ACEmfg jar files
 
 ### Policies to override parameters
 
-The location of the certificates for the OPCUA input node is copied from the data source JSON into the flow node configuration.
+The location of the certificates for the OPCUA input node is copied from the data source JSON into the flow node configuration (and then lands in the bar file).
 This can be found in the XML description of the flow (`data.msgflow`).
 In order to override this value it is possible to [use a policy](https://www.ibm.com/docs/en/app-connect/12.0?topic=policies-overriding-data-source-configuration-properties).
+
+> **Note:** Other alternative: change the path in the bar file by editing the xml file of the flow.
 
 Proceed as follows:
 
@@ -450,7 +461,6 @@ Proceed as follows:
 - Set the policy type to `User Defined`, and create two keys: `SECURITY_CLIENT_CERT` and `SECURITY_CLIENT_PRIV_KEY` with the path to those files inside the container.
 - To tell the `IntegrationServer` to use this policy project, you can set the default policy project in `overrides/server.conf.yaml`.
   The generated file here sets that value to `ContainerDeployment`.
-
 
 ### ACE: Create and Start container
 

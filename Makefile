@@ -82,10 +82,11 @@ $(OUTDIR)/ACMfg_runtime.tar.gz: $(PRIVATEDIR)/ACMfg_linux_amd64_$(acmfg_version)
 	rm -fr ACMfg-$(acmfg_version) ACMfg_runtime
 
 deploy_ace: $(CERTFILEP12) $(PRIVATEDIR)/configuration.env $(OUTDIR)/ACMfg_runtime.tar.gz
-	runtime_folder=$(ace_container_work_directory)/ACMfg_runtime envsubst < server.conf.tmpl.yaml > $(OUTDIR)/server.conf.yaml
+	acmfg_runtime_folder=$(ace_container_work_directory)/ACMfg_runtime envsubst < server.conf.tmpl.yaml > $(OUTDIR)/server.conf.yaml
 	scp \
-		$(PRIVATEDIR)/configuration.env \
 		ace_container_tools.sh \
+		deploy_acmfg.sh \
+		$(PRIVATEDIR)/configuration.env \
 		$(CERTFILEPEM) \
 		$(CERTFILEP12) \
 		$(OUTDIR)/ACMfg_runtime.tar.gz \

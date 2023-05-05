@@ -1,11 +1,12 @@
 ---
 ConnectorProviders:
+  # Ace Manufacturing configuration
   ACMfg:
-    jarsURL: '$runtime_folder'
+    jarsURL: '$acmfg_runtime_folder'
     connectorClassName: 'com.ibm.industrypack.industryclient.connector.ICConnectorFactory'
     property1: 'trustCertificate=true;isHA=false'
 EnvironmentVariables:
-  ACMFG_MAPPING_FILES_DIR: '$runtime_folder'
+  ACMFG_MAPPING_FILES_DIR: '$acmfg_runtime_folder'
   USE_DATABASE: false
 Defaults:
   policyProject: 'ContainerDeployment'

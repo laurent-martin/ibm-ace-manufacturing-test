@@ -1,4 +1,6 @@
+# Laurent Martin 2023
 # execute a command inside the container (running or not)
+# This script is loaded in the shell with command "source"
 acedo(){
     if test -z "$(podman ps --filter name=$ace_container_name -q)";then
         podman run --interactive --tty --rm=true --name mqsicmd --env LICENSE=accept \
