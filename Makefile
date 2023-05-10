@@ -73,17 +73,15 @@ doc: README.pdf
 clean::
 	rm -f README.pdf
 
-$(OUTDIR)/server.conf.yaml: server.conf.tmpl.yaml
-	acmfg_runtime_folder=$(ace_container_work_directory)/ACMfg_runtime envsubst < server.conf.tmpl.yaml > $(OUTDIR)/server.conf.yaml
 # generate and send files to container server
-deploy_ace: $(CERTFILEP12) $(PRIVATEDIR)/configuration.env $(PRIVATEDIR)/$(acmfg_tar) $(OUTDIR)/server.conf.yaml
+deploy_ace: $(CERTFILEP12) $(PRIVATEDIR)/configuration.env $(PRIVATEDIR)/$(acmfg_tar) server.conf.tmpl.yaml
 	scp \
 		ace_container_tools.rc.sh \
 		deploy_acmfg.sh \
+		server.conf.tmpl.yaml \
 		$(PRIVATEDIR)/configuration.env \
 		$(PRIVATEDIR)/$(acmfg_tar) \
 		$(CERTFILEPEM) \
 		$(CERTFILEP12) \
-		$(OUTDIR)/server.conf.yaml \
 		$(ace_server_address):
 	ssh $(ace_server_address) chmod a+x deploy_acmfg.sh
