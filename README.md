@@ -343,7 +343,10 @@ Get your `entitlement_key` from [My IBM Product Services](https://myibm.ibm.com/
 Edit the file: `private/configuration.env` and place your entitlement key and a secret for the `IntegrationServer` vault.
 This is needed to pull the image.
 
-Deploy that to the VM where the container will be started:
+Execute that make target, it will:
+
+- generate the `server.conf.yaml` from the template
+- send files to the integration server in user's home
 
 ```bash
 make deploy_ace
@@ -353,7 +356,7 @@ Then, on the VM where podman will be used, load the tools:
 
 ```bash
 source configuration.env
-source ace_container_tools.sh
+source ace_container_tools.rc.sh
 ```
 
 Login to IBM image repository
@@ -424,15 +427,6 @@ mqsicredentials \
 
 ### ACE: Add ACMfg
 
-This make target will:
-
-- generate the `server.conf.yaml` from the template
-- send files to the integration server in user's home
-
-```bash
-make deploy_ace
-```
-
 On the remote server, in user's home:
 
 ```bash
@@ -475,7 +469,7 @@ Several ports are to be published to allow access to the `IntegrationServer`:
 | 7800  | user API port HTTP         |
 | 7843  | user API port HTTPS        |
 
-The function `create_container_ace` from `ace_container_tools.sh` is used:
+The function `create_container_ace` from `ace_container_tools.rc.sh` is used:
 
 ```bash
 create_container_ace

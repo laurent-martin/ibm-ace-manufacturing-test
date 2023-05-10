@@ -73,22 +73,17 @@ doc: README.pdf
 clean::
 	rm -f README.pdf
 
-# Create a simplified archive
-$(OUTDIR)/ACMfg_runtime.tar.gz: $(PRIVATEDIR)/ACMfg_linux_amd64_$(acmfg_version)_developer.tar.gz
-	tar zxvf $(PRIVATEDIR)/ACMfg_linux_amd64_$(acmfg_version)_developer.tar.gz ACMfg-$(acmfg_version)/runtime/amd64_linux_2
-	rm -fr ACMfg_runtime
-	mv ACMfg-$(acmfg_version)/runtime/amd64_linux_2 ACMfg_runtime
-	tar -zcvf $@ --no-xattrs ACMfg_runtime
-	rm -fr ACMfg-$(acmfg_version) ACMfg_runtime
-
-deploy_ace: $(CERTFILEP12) $(PRIVATEDIR)/configuration.env $(OUTDIR)/ACMfg_runtime.tar.gz
+$(OUTDIR)/server.conf.yaml: server.conf.tmpl.yaml
 	acmfg_runtime_folder=$(ace_container_work_directory)/ACMfg_runtime envsubst < server.conf.tmpl.yaml > $(OUTDIR)/server.conf.yaml
+# generate and send files to container server
+deploy_ace: $(CERTFILEP12) $(PRIVATEDIR)/configuration.env $(PRIVATEDIR)/$(acmfg_tar) $(OUTDIR)/server.conf.yaml
 	scp \
-		ace_container_tools.sh \
+		ace_container_tools.rc.sh \
 		deploy_acmfg.sh \
 		$(PRIVATEDIR)/configuration.env \
+		$(PRIVATEDIR)/$(acmfg_tar) \
 		$(CERTFILEPEM) \
 		$(CERTFILEP12) \
-		$(OUTDIR)/ACMfg_runtime.tar.gz \
 		$(OUTDIR)/server.conf.yaml \
 		$(ace_server_address):
+	ssh $(ace_server_address) chmod a+x deploy_acmfg.sh

@@ -1,6 +1,11 @@
 # Laurent Martin 2023
 # execute a command inside the container (running or not)
 # This script is loaded in the shell with command "source"
+if test -z "$ace_container_name"; then
+    set -a
+    source configuration.env
+    set +a
+fi
 acedo(){
     if test -z "$(podman ps --filter name=$ace_container_name -q)";then
         podman run --interactive --tty --rm=true --name mqsicmd --env LICENSE=accept \
@@ -9,9 +14,6 @@ acedo(){
         podman exec --interactive --tty $ace_container_name bash -l -c "$*"
     fi
 }
-# create command aliases on host, forwarded to container
-for c in createworkdir vault credentials setdbparms;do alias mqsi$c="acedo mqsi$c";done
-alias keytool='acedo keytool'
 # modification of IntegrationServer config file
 aceserverconf(){
   local section=$1
@@ -40,3 +42,8 @@ create_container_ace(){
     echo "podman rm $ace_container_name"
     echo "podman logs -f $ace_container_name"
 }
+# expand aliases, even if not interactive
+shopt -s expand_aliases
+# create command aliases on host, forwarded to container
+for c in createworkdir vault credentials setdbparms;do alias "mqsi$c=acedo mqsi$c";done
+alias keytool='acedo keytool'
