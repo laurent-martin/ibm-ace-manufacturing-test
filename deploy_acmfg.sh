@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 # exit on any error (set -e)
 trap 'echo "ERROR: command failed";exit' ERR
-set -x
+#set -x
 # load variables and helper aliases to run commands in container
 source ace_container_tools.rc.sh
 if test -d "$ace_host_work_directory";then
