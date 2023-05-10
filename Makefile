@@ -6,22 +6,44 @@ PRIVATEDIR=private
 # generated files are placed here
 OUTDIR=generated
 
+# get config parameters
+include $(OUTDIR)/configuration.mak
+
+# default target
+all::
+
+###################################
+# Config file
+# generate initial empty config from template
+$(PRIVATEDIR)/configuration.env:
+	mkdir -p $(PRIVATEDIR)
+	@if test -e $(PRIVATEDIR)/configuration.env;then echo 'ERROR: conf file already exists: $@';exit 1;fi
+	sed 's/=.*/=_fill_here_/' < configuration.tmpl.env > $@
+
+$(OUTDIR)/configuration.mak: $(PRIVATEDIR)/configuration.env
+	mkdir -p $(OUTDIR)
+	sed 's/{/(/g;s/}/)/g' < $< > $@
+
+init: $(PRIVATEDIR)/configuration.env
+	@echo Done.
+
+# create config template from custom config (when parameters are added)
+template:
+	sed -Ee 's/(_key|_address)=.*/\1=_your_value_here_/' < $(PRIVATEDIR)/configuration.env > configuration.tmpl.env
+
+clean::
+	rm -fr $(OUTDIR)
+
+
+###################################
+# Client certificate
 CSRFILE=$(OUTDIR)/$(cert_name).csr
 SSLCONF=$(OUTDIR)/$(cert_name).conf
 PRIVKEYFILE=$(OUTDIR)/$(cert_name).key
 CERTFILEPEM=$(OUTDIR)/$(cert_pem)
 CERTFILEP12=$(OUTDIR)/$(cert_p12)
 
-# get specific info from this file
-include $(OUTDIR)/configuration.mak
-
 all:: $(CERTFILEP12)
-
-init: $(PRIVATEDIR)/configuration.env
-	@echo Done.
-
-clean::
-	rm -fr $(OUTDIR)
 
 $(PRIVKEYFILE):
 	openssl genrsa -out $(PRIVKEYFILE) 4096
@@ -38,26 +60,8 @@ $(CERTFILEPEM): $(PRIVKEYFILE) $(CSRFILE)
 $(CERTFILEP12): $(CERTFILEPEM) $(PRIVKEYFILE)
 	openssl pkcs12 -password pass:"$(pkcs12_key)" -export -in $(CERTFILEPEM) -inkey $(PRIVKEYFILE) -out $(CERTFILEP12)
 
-# create config template
-template:
-	sed -Ee 's/(_key|_address)=.*/\1=_your_value_here_/' < $(PRIVATEDIR)/configuration.env > configuration.tmpl.env
-
-# generate initial empty config from template
-$(PRIVATEDIR)/configuration.env:
-	mkdir -p $(PRIVATEDIR)
-	@if test -e $(PRIVATEDIR)/configuration.env;then echo 'ERROR: conf file already exists: $@';exit 1;fi
-	sed 's/=.*/=_fill_here_/' < configuration.tmpl.env > $@
-$(OUTDIR)/configuration.mak: $(PRIVATEDIR)/configuration.env
-	mkdir -p $(OUTDIR)
-	sed 's/{/(/g;s/}/)/g' < $< > $@
-
-# send script to opc simulator
-deploy_opcplc:
-	ssh $(opcua_server_address) mkdir -p pki/{issuer,trusted}
-	scp $(CERTFILEPEM) $(opcua_server_address):pki
-	scp start_opc.sh $(opcua_server_address):
-	ssh $(opcua_server_address) chmod a+x start_opc.sh
-
+###################################
+# Documentation
 %.pdf: %.md
 	pandoc \
 		--standalone --from=gfm --to=pdf --pdf-engine=xelatex \
@@ -68,10 +72,22 @@ deploy_opcplc:
 		--variable=mainfont:Arial --variable=urlcolor:blue --variable=geometry:margin=15mm \
 		-o $@ $<
 
+all:: doc
+
 doc: README.pdf
 
 clean::
 	rm -f README.pdf
+
+###################################
+# Deployments
+
+# send script to opc simulator
+deploy_opcplc:
+	ssh $(opcua_server_address) mkdir -p pki/{issuer,trusted}
+	scp $(CERTFILEPEM) $(opcua_server_address):pki
+	scp start_opc.sh $(opcua_server_address):
+	ssh $(opcua_server_address) chmod a+x start_opc.sh
 
 # generate and send files to container server
 deploy_ace: $(CERTFILEP12) $(PRIVATEDIR)/configuration.env $(PRIVATEDIR)/$(acmfg_tar) server.conf.tmpl.yaml
