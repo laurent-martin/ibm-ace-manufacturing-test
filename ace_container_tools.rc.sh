@@ -7,11 +7,11 @@ if test -z "$ace_container_name"; then
     set +a
 fi
 acedo(){
-    if test -z "$(podman ps --filter name=$ace_container_name -q)";then
-        podman run --interactive --tty --rm=true --name mqsicmd --env LICENSE=accept \
+    if test -z "$($container_engine ps --filter name=$ace_container_name -q)";then
+        $container_engine run --interactive --tty --rm=true --name mqsicmd --env LICENSE=accept \
         --volume $ace_host_work_directory:$ace_container_work_directory --entrypoint=bash $ace_image -l -c "$*"
     else
-        podman exec --interactive --tty $ace_container_name bash -l -c "$*"
+        $container_engine exec --interactive --tty $ace_container_name bash -l -c "$*"
     fi
 }
 # modification of IntegrationServer config file
@@ -22,7 +22,7 @@ aceserverconf(){
   sed --in-place=.bak --regexp-extended --expression="/^\s*${section}:/,/^$/ s|#?(${parameter}:) '[^']*'|\1 '${value}'|" $ace_host_work_directory/server.conf.yaml
 }
 create_container_ace(){
-    podman create \
+    $container_engine create \
         --name $ace_container_name \
         --env LICENSE=accept \
         --publish 7600:7600 \
@@ -37,10 +37,10 @@ create_container_ace(){
     echo "Container name: $ace_container_name"
     echo "Persistency volume: $ace_host_work_directory"
     echo "Manage container:"
-    echo "podman start $ace_container_name"
-    echo "podman stop $ace_container_name"
-    echo "podman rm $ace_container_name"
-    echo "podman logs -f $ace_container_name"
+    echo "$container_engine start $ace_container_name"
+    echo "$container_engine stop $ace_container_name"
+    echo "$container_engine rm $ace_container_name"
+    echo "$container_engine logs -f $ace_container_name"
 }
 # expand aliases, even if not interactive
 shopt -s expand_aliases

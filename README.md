@@ -40,6 +40,8 @@ Both the Makefile and scripts rely on `private/configuration.env` (shell variabl
 
 The required values for the configuration parameters are commented in the template and later in this document.
 
+The container engine used is `podman`, but `docker` can also be used (set in config file).
+
 ## Security and Encryption
 
 ### Generation of Client Certificate
@@ -132,26 +134,34 @@ So, the default folders used in the container are:
 
 If no server certificate is provided, the server generates a self signed certificate containing the hostname (of the container, so we fix the hostname value on container startup) in `/app/pki/own`.
 
-Edit configuration.env and set the address of the OPC PLC VM: `opcua_server_address`
-The execute:
+Edit configuration.env and set the address of the OPC PLC VM: `opcua_server_address`.
+Then execute:
 
 ```bash
 make deploy_opcplc
 ```
 
+> **Note:** To just build the file: `make build_opcplc`
+
 It will do the following:
 
-- On the OPC PLC VM, in the user's home, a folder `pki` is created
-- Copy the file `clientCertificate.crt` and `start_opc.sh` into it.
-
-Later, when the container is started, a volume is created to map this `pki` folder in the user's home to the `/app/pki` folder in the container.
-The simulator is given the path to the client certificate (in the container) to add it to the trusted store.
+- Build an archive (tgz) with necessary files
+- Send this archive to the container host for simulator
+- Extract the archive on remote host
 
 ### Startup
 
-The startup script is provider for convenience: `start_opc.sh`
+The container creation script is provider for convenience: `create_container_opcplc.sh`
 
-Several parameters are provided to allow unencrypted use, trust of client cert, fix the container hostname.
+Execution does this:
+
+- Create a folder `pki` in the current folder ($HOME). This folder will be mounted as volume in the container (`/app/pki`).
+- Copy the file `clientCertificate.crt` into it.
+- Create the container (but not start it)
+- Display useful commands
+
+Several parameters are provided to the simulator to allow unencrypted use, trust of client cert, fix the container hostname.
+The simulator is given the path to the client certificate (in the container) to add it to the trusted store.
 
 ### Server certificate
 
@@ -201,7 +211,7 @@ Select `Source` in `DataSources` (click on it) for the configuration of the data
 For testing purpose **only**, it is possible to register a source server without encryption and authentication.
 This is much simpler than using certificates.
 
-> **Note:** The configuration of the startup script `start_opc.sh` allows connection from client without encryption.
+> **Note:** The configuration of the startup script `create_container_opcplc.sh` allows connection from client without encryption.
 (option `--unsecuretransport`)
 
 In `DataSource Properties` enter these values:
@@ -379,7 +389,8 @@ This script performs the following steps:
   ```
 
 - Work directory: Creation
-  [Ref.: ACE Doc.: mqsicreateworkdir](https://www.ibm.com/docs/en/app-connect/12.0?topic=commands-mqsicreateworkdir-command)
+
+  - [Ref.: ACE Doc.: mqsicreateworkdir](https://www.ibm.com/docs/en/app-connect/12.0?topic=commands-mqsicreateworkdir-command)
 
   Since we will mount an empty folder from the host, we must initialize the work directory for the `IntegrationServer` using `mqsicreateworkdir`:
 
@@ -391,9 +402,11 @@ This script performs the following steps:
 
 - Vault: Creation
 
-  [Ref.: Youtube: Storing encrypted security credentials in a vault](https://www.youtube.com/watch?v=x78V_8k1P-M)
-  [Ref.: ACE Doc.: mqsivault](https://www.ibm.com/docs/en/app-connect/12.0?topic=commands-mqsivault-command)
-  [Ref.: ACE Doc.: mqsicredentials](https://www.ibm.com/docs/en/app-connect/12.0?topic=commands-mqsicredentials-command)
+  - [Ref.: Youtube: Storing encrypted security credentials in a vault](https://www.youtube.com/watch?v=x78V_8k1P-M)
+
+  - [Ref.: ACE Doc.: mqsivault](https://www.ibm.com/docs/en/app-connect/12.0?topic=commands-mqsivault-command)
+
+  - [Ref.: ACE Doc.: mqsicredentials](https://www.ibm.com/docs/en/app-connect/12.0?topic=commands-mqsicredentials-command)
 
   Create an empty vault in the `IntegrationServer` work dir:
 
@@ -429,7 +442,7 @@ This script performs the following steps:
   --credential-type ldap \
   --credential-name $source_mapping_path/acmfgPrivateKeyUser \
   --username not_used \
-  --password "$pkcs12_key"
+  --password "$cert_pkcs12_password"
   ```
 
 - Add ACMfg

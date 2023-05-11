@@ -9,7 +9,7 @@ if test -d "$ace_host_work_directory";then
     exit 1
 fi
 # login to allow image pull
-podman login cp.icr.io -u cp --password-stdin <<< $entitlement_key
+$container_engine login cp.icr.io -u cp --password-stdin <<< $entitlement_key
 # prepare work dir
 mkdir -p $ace_host_work_directory
 chmod 777 $ace_host_work_directory
@@ -27,7 +27,7 @@ mqsicredentials \
 --credential-type ldap \
 --credential-name $source_mapping_path/acmfgPrivateKeyUser \
 --username not_used \
---password "$pkcs12_key"
+--password "$cert_pkcs12_password"
 # Some help on next commands
 cat<<EOF
 To create the container:

@@ -6,6 +6,10 @@ PRIVATEDIR=private
 # generated files are placed here
 OUTDIR=generated
 
+# GNU tar is needed
+# on mac: TAR=gtar make -e
+TAR=tar
+
 # get config parameters
 include $(OUTDIR)/configuration.mak
 
@@ -49,7 +53,7 @@ $(PRIVKEYFILE):
 	openssl genrsa -out $(PRIVKEYFILE) 4096
 
 $(SSLCONF): ssl.tmpl
-	param_fqdn=$(development_address) envsubst < ssl.tmpl > $(SSLCONF)
+	param_fqdn=$(cert_address) envsubst < ssl.tmpl > $(SSLCONF)
 
 $(CSRFILE): $(PRIVKEYFILE) $(SSLCONF)
 	openssl req -new -sha256 -out $(CSRFILE) -key $(PRIVKEYFILE) -config $(SSLCONF)
@@ -58,19 +62,19 @@ $(CERTFILEPEM): $(PRIVKEYFILE) $(CSRFILE)
 	openssl x509 -req -sha256 -days 365 -in $(CSRFILE) -signkey $(PRIVKEYFILE) -out $(CERTFILEPEM) -extensions req_ext -extfile $(SSLCONF)
 
 $(CERTFILEP12): $(CERTFILEPEM) $(PRIVKEYFILE)
-	openssl pkcs12 -password pass:"$(pkcs12_key)" -export -in $(CERTFILEPEM) -inkey $(PRIVKEYFILE) -out $(CERTFILEP12)
+	openssl pkcs12 -password pass:"$(cert_pkcs12_password)" -export -in $(CERTFILEPEM) -inkey $(PRIVKEYFILE) -out $(CERTFILEP12)
 
 ###################################
 # Documentation
 %.pdf: %.md
 	pandoc \
-		--standalone --from=gfm --to=pdf --pdf-engine=xelatex \
-		--resource-path=.. --toc --number-sections \
-		--shift-heading-level-by=-1 \
-		--variable=include-before:'\newpage' --variable=documentclass:report \
-		--variable=date:$$(date '+%Y/%m/%d') --variable=author:'Laurent MARTIN' \
-		--variable=mainfont:Arial --variable=urlcolor:blue --variable=geometry:margin=15mm \
-		-o $@ $<
+	  --standalone --from=gfm --to=pdf --pdf-engine=xelatex \
+	  --resource-path=.. --toc --number-sections \
+	  --shift-heading-level-by=-1 \
+	  --variable=include-before:'\newpage' --variable=documentclass:report \
+	  --variable=date:$$(date '+%Y/%m/%d') --variable=author:'Laurent MARTIN' \
+	  --variable=mainfont:Arial --variable=urlcolor:blue --variable=geometry:margin=15mm \
+	  -o $@ $<
 
 all:: doc
 
@@ -82,22 +86,37 @@ clean::
 ###################################
 # Deployments
 
-# send script to opc simulator
-deploy_opcplc:
-	ssh $(opcua_server_address) mkdir -p pki/{issuer,trusted}
-	scp $(CERTFILEPEM) $(opcua_server_address):pki
-	scp start_opc.sh $(opcua_server_address):
-	ssh $(opcua_server_address) chmod a+x start_opc.sh
+# build files to send to opc simulator
+build_opcplc: $(OUTDIR)/opc_server_files.tgz
 
-# generate and send files to container server
-deploy_ace: $(CERTFILEP12) $(PRIVATEDIR)/configuration.env $(PRIVATEDIR)/$(acmfg_tar) server.conf.tmpl.yaml
-	scp \
-		ace_container_tools.rc.sh \
-		deploy_acmfg.sh \
-		server.conf.tmpl.yaml \
-		$(PRIVATEDIR)/configuration.env \
-		$(PRIVATEDIR)/$(acmfg_tar) \
-		$(CERTFILEPEM) \
-		$(CERTFILEP12) \
-		$(ace_server_address):
-	ssh $(ace_server_address) chmod a+x deploy_acmfg.sh
+# GNU tar required here
+$(OUTDIR)/opc_server_files.tgz: $(CERTFILEPEM)
+	chmod a+x create_container_opcplc.sh
+	$(TAR) -c -v -z -f $@ \
+	  --transform='s|.*/||' \
+	  create_container_opcplc.sh \
+	  $(PRIVATEDIR)/configuration.env \
+	  $(CERTFILEPEM)
+# send files to simulator host
+deploy_opcplc: $(OUTDIR)/opc_server_files.tgz
+	scp $(OUTDIR)/opc_server_files.tgz $(opcua_server_address):
+	ssh $(opcua_server_address) tar zxvf opc_server_files.tgz
+
+# generate files to integration server host
+build_ace: $(OUTDIR)/ace_server_files.tgz
+
+$(OUTDIR)/ace_server_files.tgz: $(CERTFILEP12) $(PRIVATEDIR)/configuration.env $(PRIVATEDIR)/$(acmfg_tar) server.conf.tmpl.yaml
+	$(TAR) -c -v -z -f $@ \
+	  --transform='s|.*/||' \
+	  ace_container_tools.rc.sh \
+	  deploy_acmfg.sh \
+	  server.conf.tmpl.yaml \
+	  $(PRIVATEDIR)/configuration.env \
+	  $(PRIVATEDIR)/$(acmfg_tar) \
+	  $(CERTFILEPEM) \
+	  $(CERTFILEP12)
+# send files to ace host
+deploy_ace: $(OUTDIR)/ace_server_files.tgz
+	scp $(OUTDIR)/ace_server_files.tgz \
+	  $(ace_server_address):
+	ssh $(opcua_server_address) tar zxvf ace_server_files.tgz
