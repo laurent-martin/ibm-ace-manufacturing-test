@@ -18,7 +18,7 @@ all::
 $(PRIVATEDIR)/configuration.env:
 	mkdir -p $(PRIVATEDIR)
 	@if test -e $(PRIVATEDIR)/configuration.env;then echo 'ERROR: conf file already exists: $@';exit 1;fi
-	sed 's/=.*/=_fill_here_/' < configuration.tmpl.env > $@
+	cp configuration.tmpl.env $@
 
 $(OUTDIR)/configuration.mak: $(PRIVATEDIR)/configuration.env
 	mkdir -p $(OUTDIR)
