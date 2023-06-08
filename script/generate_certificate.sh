@@ -1,6 +1,11 @@
 #!/bin/bash
+
+# exit on error
+set -e
+
 # Generates a self-signed certificate and key in PKCS12 format
 OUTDIR=$1
+SSLCONFTMPL=$2
 
 if test -z "$OUTDIR"; then
     echo "Usage: $0 <output directory>"
@@ -24,7 +29,7 @@ echo "Generating private key"
 openssl genrsa -out ${PRIVKEYFILE} 4096
 
 echo "Generating SSL config"
-param_fqdn=${cert_address} envsubst < ssl.tmpl > ${SSLCONF}
+param_fqdn=${cert_address} envsubst < ${SSLCONFTMPL} > ${SSLCONF}
 
 echo "Generating CSR"
 openssl req -new -sha256 -out ${CSRFILE} -key ${PRIVKEYFILE} -config ${SSLCONF}

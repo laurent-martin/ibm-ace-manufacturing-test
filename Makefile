@@ -6,6 +6,9 @@ PRIVATEDIR=private
 # generated files are placed here
 OUTDIR=generated
 
+# source files, scripts
+SCRIPTDIR=script
+
 # GNU tar is needed
 # on mac: TAR=gtar make -e
 TAR=tar
@@ -33,7 +36,7 @@ init: $(PRIVATEDIR)/configuration.env
 
 # create config template from custom config (when parameters are added)
 template:
-	sed -Ee 's/(_key|_address)=.*/\1=_your_value_here_/' < $(PRIVATEDIR)/configuration.env > configuration.tmpl.env
+	sed -Ee 's/(_key|_address)=.*/\1=_your_value_here_/' < $(PRIVATEDIR)/configuration.env > $(SCRIPTDIR)/configuration.tmpl.env
 
 clean::
 	rm -fr $(OUTDIR)
@@ -42,8 +45,8 @@ clean::
 ###################################
 # Client certificate
 all:: $(OUTDIR)/$(cert_p12)
-$(OUTDIR)/$(cert_p12): ssl.tmpl
-	./generate_certificate.sh $(OUTDIR)
+$(OUTDIR)/$(cert_p12) $(OUTDIR)/$(cert_pem): $(SCRIPTDIR)/ssl.tmpl
+	$(SCRIPTDIR)/generate_certificate.sh $(OUTDIR) $(SCRIPTDIR)/ssl.tmpl
 
 ###################################
 # Documentation
@@ -72,10 +75,10 @@ build_opcplc: $(OUTDIR)/opc_server_files.tgz
 
 # GNU tar required here
 $(OUTDIR)/opc_server_files.tgz: $(OUTDIR)/$(cert_pem)
-	chmod a+x create_container_opcplc.sh
+	chmod a+x $(SCRIPTDIR)/create_container_opcplc.sh
 	$(TAR) -c -v -z -f $@ \
 	  --transform='s|.*/||' \
-	  create_container_opcplc.sh \
+	  $(SCRIPTDIR)/create_container_opcplc.sh \
 	  $(PRIVATEDIR)/configuration.env \
 	  $(OUTDIR)/$(cert_pem)
 # send files to simulator host
@@ -88,12 +91,12 @@ ssh_opcplc:
 # generate files to integration server host
 build_ace: $(OUTDIR)/ace_server_files.tgz
 # byuild a flat archive with files to transfer
-$(OUTDIR)/ace_server_files.tgz: $(OUTDIR)/$(cert_p12) $(PRIVATEDIR)/configuration.env $(PRIVATEDIR)/$(acmfg_tar) server.conf.tmpl.yaml
+$(OUTDIR)/ace_server_files.tgz: $(OUTDIR)/$(cert_p12) $(PRIVATEDIR)/configuration.env $(PRIVATEDIR)/$(acmfg_tar) $(SCRIPTDIR)/server.conf.tmpl.yaml
 	$(TAR) -c -v -z -f $@ \
 	  --transform='s|.*/||' \
-	  ace_container_tools.rc.sh \
-	  deploy_acmfg.sh \
-	  server.conf.tmpl.yaml \
+	  $(SCRIPTDIR)/ace_container_tools.rc.sh \
+	  $(SCRIPTDIR)/deploy_acmfg.sh \
+	  $(SCRIPTDIR)/server.conf.tmpl.yaml \
 	  $(PRIVATEDIR)/configuration.env \
 	  $(PRIVATEDIR)/$(acmfg_tar) \
 	  $(OUTDIR)/$(cert_pem) \
