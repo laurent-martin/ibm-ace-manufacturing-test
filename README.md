@@ -23,6 +23,8 @@ In the following sections, `$HOME` refers to `%USERPROFILE%` on Windows.
 
 A [IBM Performance Report](https://www.ibm.com/support/pages/ibm-app-connect-manufacturing-v20-performance-reports) for ACMfg is available.
 
+[ACE Manufacturing documentation](https://www.ibm.com/docs/en/app-connect/12.0?topic=app-connect-manufacturing)
+
 ## Scripts and initialization
 
 A Makefile and scripts are provided.
@@ -187,12 +189,12 @@ ACMfg provides a manufacturing view with the following tabs:
 
 > **Note:** (IMPORTANT) The values shown in `DataSource Properties` are the ones for the data source selected in `DataSources`
 >
-> **Note:** (IMPORTANT) Similarly, later when we create the Item mappings, it is important to select the Item in tab `Client Items` so that buttons in tab `Client Item Properties` are activated.
+> **Note:** (IMPORTANT) Similarly, later when we create the item mappings, it is important to select the item in tab `Client Items` so that buttons in tab `Client Item Properties` are activated.
 
 ### Creation of Data Source
 
 In the `DataSources` tab is located the root source, named `Source`.
-This name can be changed.
+This name can be changed, but let's keep it to `Source`.
 
 Sources can be configured in a hierarchical manner, i.e. sub nodes can be created under the root node or another node.
 
@@ -250,13 +252,22 @@ Once accepted the certificate is stored in `$HOME/.acmfg/PKI/CA/certs` (in DER f
 
 ### Preparation of mapping nodes
 
+One finds two concepts:
+
+- Source Items : items identified on a server (i.e. in a given source)
+- Client Items : items identified on client side, those items may come from different sources
+
+The OPC-UA client (ACE) will identify items by their Client Item Path, and each client item refers to a server item on a given server (source).
+
+So, one needs to create a mapping, to maps potentially multiple source, and multiple items per source, to a single client-side identification.
+
 In the manufacturing view, follow these steps:
 
-| ACMfg Window Tab         | Action                          |
-|--------------------------|---------------------------------|
-| `DataSources`            | Select the data source          |
-| `DataSource Properties`  | Check that it is properly configured and connected. Click on `Refresh Source Item Tree` |
-| `Source Items`           | Check that items were retrieved.                                           |
+| ACMfg Window Tab         | Action                                                                                                                  |
+|--------------------------|-------------------------------------------------------------------------------------------------------------------------|
+| `DataSources`            | **Select** the data source (e.g. `Source`), properties are then shown in `DataSource Properties`.                       |
+| `DataSource Properties`  | Configure, **Create**. Click on `Refresh Source Item Tree`. This fills `Source Items` (Source must still be selected)   |
+| `Source Items`           | Check that items were retrieved. (with Source selected)                    |
 | `Client Items`           | Select the element `Item`: it is the root item (it can be renamed).        |
 | `Source Items`           | Navigate to Objects&rarr;OpcPlc&rarr;Telemetry. Select either a full section, or a list of source items, or a single item. For example a few sensors. |
 | `Client Item Properties` | The button `Create Client Item Tree` becomes available (multiple selections), or `Create Client Item` (single selection). Click on the available button. |

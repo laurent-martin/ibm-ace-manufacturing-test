@@ -41,28 +41,9 @@ clean::
 
 ###################################
 # Client certificate
-CSRFILE=$(OUTDIR)/$(cert_name).csr
-SSLCONF=$(OUTDIR)/$(cert_name).conf
-PRIVKEYFILE=$(OUTDIR)/$(cert_name).key
-CERTFILEPEM=$(OUTDIR)/$(cert_pem)
-CERTFILEP12=$(OUTDIR)/$(cert_p12)
-
-all:: $(CERTFILEP12)
-
-$(PRIVKEYFILE):
-	openssl genrsa -out $(PRIVKEYFILE) 4096
-
-$(SSLCONF): ssl.tmpl
-	param_fqdn=$(cert_address) envsubst < ssl.tmpl > $(SSLCONF)
-
-$(CSRFILE): $(PRIVKEYFILE) $(SSLCONF)
-	openssl req -new -sha256 -out $(CSRFILE) -key $(PRIVKEYFILE) -config $(SSLCONF)
-
-$(CERTFILEPEM): $(PRIVKEYFILE) $(CSRFILE)
-	openssl x509 -req -sha256 -days 365 -in $(CSRFILE) -signkey $(PRIVKEYFILE) -out $(CERTFILEPEM) -extensions req_ext -extfile $(SSLCONF)
-
-$(CERTFILEP12): $(CERTFILEPEM) $(PRIVKEYFILE)
-	openssl pkcs12 -password pass:"$(cert_pkcs12_password)" -export -in $(CERTFILEPEM) -inkey $(PRIVKEYFILE) -out $(CERTFILEP12)
+all:: $(OUTDIR)/$(cert_p12)
+$(OUTDIR)/$(cert_p12): ssl.tmpl
+	./generate_certificate.sh $(OUTDIR)
 
 ###################################
 # Documentation
@@ -80,8 +61,8 @@ all:: doc
 
 doc: README.pdf
 
-clean::
-	rm -f README.pdf
+#clean::
+#	rm -f README.pdf
 
 ###################################
 # Deployments
@@ -90,22 +71,24 @@ clean::
 build_opcplc: $(OUTDIR)/opc_server_files.tgz
 
 # GNU tar required here
-$(OUTDIR)/opc_server_files.tgz: $(CERTFILEPEM)
+$(OUTDIR)/opc_server_files.tgz: $(OUTDIR)/$(cert_pem)
 	chmod a+x create_container_opcplc.sh
 	$(TAR) -c -v -z -f $@ \
 	  --transform='s|.*/||' \
 	  create_container_opcplc.sh \
 	  $(PRIVATEDIR)/configuration.env \
-	  $(CERTFILEPEM)
+	  $(OUTDIR)/$(cert_pem)
 # send files to simulator host
 deploy_opcplc: $(OUTDIR)/opc_server_files.tgz
 	scp $(OUTDIR)/opc_server_files.tgz $(opcua_server_address):
-	ssh $(opcua_server_address) tar zxvf opc_server_files.tgz
+	ssh $(opcua_server_address) 'rm -fr opc_files && mkdir -p opc_files && tar --directory=opc_files -x -v -z -f opc_server_files.tgz && rm -f opc_server_files.tgz'
+ssh_opcplc:
+	ssh $(opcua_server_address)
 
 # generate files to integration server host
 build_ace: $(OUTDIR)/ace_server_files.tgz
-
-$(OUTDIR)/ace_server_files.tgz: $(CERTFILEP12) $(PRIVATEDIR)/configuration.env $(PRIVATEDIR)/$(acmfg_tar) server.conf.tmpl.yaml
+# byuild a flat archive with files to transfer
+$(OUTDIR)/ace_server_files.tgz: $(OUTDIR)/$(cert_p12) $(PRIVATEDIR)/configuration.env $(PRIVATEDIR)/$(acmfg_tar) server.conf.tmpl.yaml
 	$(TAR) -c -v -z -f $@ \
 	  --transform='s|.*/||' \
 	  ace_container_tools.rc.sh \
@@ -113,10 +96,12 @@ $(OUTDIR)/ace_server_files.tgz: $(CERTFILEP12) $(PRIVATEDIR)/configuration.env $
 	  server.conf.tmpl.yaml \
 	  $(PRIVATEDIR)/configuration.env \
 	  $(PRIVATEDIR)/$(acmfg_tar) \
-	  $(CERTFILEPEM) \
-	  $(CERTFILEP12)
+	  $(OUTDIR)/$(cert_pem) \
+	  $(OUTDIR)/$(cert_p12)
 # send files to ace host
 deploy_ace: $(OUTDIR)/ace_server_files.tgz
 	scp $(OUTDIR)/ace_server_files.tgz \
 	  $(ace_server_address):
-	ssh $(opcua_server_address) tar zxvf ace_server_files.tgz
+	ssh $(ace_server_address) 'rm -fr ace_files && mkdir -p ace_files && tar --directory=ace_files -x -v -z -f ace_server_files.tgz && rm -f ace_server_files.tgz'
+ssh_ace:
+	ssh $(ace_server_address)
