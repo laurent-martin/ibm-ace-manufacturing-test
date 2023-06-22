@@ -68,19 +68,19 @@ doc: README.pdf
 #	rm -f README.pdf
 
 ###################################
-# Deployments
+# OPCUA Simulator
 
-# build files to send to opc simulator
-build_opcplc: $(OUTDIR)/opc_server_files.tgz
-
-# GNU tar required here
-$(OUTDIR)/opc_server_files.tgz: $(OUTDIR)/$(cert_pem)
-	chmod a+x $(SCRIPTDIR)/create_container_opcplc.sh
-	$(TAR) -c -v -z -f $@ \
-	  --transform='s|.*/||' \
+OPC_ARCHIVE=\
 	  $(SCRIPTDIR)/create_container_opcplc.sh \
 	  $(PRIVATEDIR)/configuration.env \
 	  $(OUTDIR)/$(cert_pem)
+
+# build files to send to opc simulator
+build_opcplc: $(OUTDIR)/opc_server_files.tgz
+# GNU tar required here
+$(OUTDIR)/opc_server_files.tgz: $(OPC_ARCHIVE)
+	chmod a+x $(SCRIPTDIR)/create_container_opcplc.sh
+	$(TAR) -c -v -z -f $@ --transform='s|.*/||' $(OPC_ARCHIVE)
 # send files to simulator host
 deploy_opcplc: $(OUTDIR)/opc_server_files.tgz
 	scp $(OUTDIR)/opc_server_files.tgz $(opcua_server_address):
@@ -88,23 +88,26 @@ deploy_opcplc: $(OUTDIR)/opc_server_files.tgz
 ssh_opcplc:
 	ssh $(opcua_server_address)
 
+###################################
+# ACE
+
+ACE_ARCHIVE=$(SCRIPTDIR)/ace_container_tools.rc.sh \
+$(SCRIPTDIR)/prepare_ace_workdir.sh \
+$(SCRIPTDIR)/server.conf.tmpl.yaml \
+$(PRIVATEDIR)/configuration.env \
+$(PRIVATEDIR)/$(acmfg_tar) \
+$(OUTDIR)/$(cert_pem) \
+$(OUTDIR)/$(cert_p12)
+
 # generate files to integration server host
 build_ace: $(OUTDIR)/ace_server_files.tgz
-# byuild a flat archive with files to transfer
-$(OUTDIR)/ace_server_files.tgz: $(OUTDIR)/$(cert_p12) $(PRIVATEDIR)/configuration.env $(PRIVATEDIR)/$(acmfg_tar) $(SCRIPTDIR)/server.conf.tmpl.yaml
-	$(TAR) -c -v -z -f $@ \
-	  --transform='s|.*/||' \
-	  $(SCRIPTDIR)/ace_container_tools.rc.sh \
-	  $(SCRIPTDIR)/deploy_acmfg.sh \
-	  $(SCRIPTDIR)/server.conf.tmpl.yaml \
-	  $(PRIVATEDIR)/configuration.env \
-	  $(PRIVATEDIR)/$(acmfg_tar) \
-	  $(OUTDIR)/$(cert_pem) \
-	  $(OUTDIR)/$(cert_p12)
+# build a flat archive with files to transfer
+$(OUTDIR)/ace_server_files.tgz: $(ACE_ARCHIVE)
+	chmod a+x $(SCRIPTDIR)/prepare_ace_workdir.sh
+	$(TAR) -c -v -z -f $@ --transform='s|.*/||' $(ACE_ARCHIVE)
 # send files to ace host
 deploy_ace: $(OUTDIR)/ace_server_files.tgz
-	scp $(OUTDIR)/ace_server_files.tgz \
-	  $(ace_server_address):
+	scp $(OUTDIR)/ace_server_files.tgz $(ace_server_address):
 	ssh $(ace_server_address) 'rm -fr ace_files && mkdir -p ace_files && tar --directory=ace_files -x -v -z -f ace_server_files.tgz && rm -f ace_server_files.tgz'
 ssh_ace:
 	ssh $(ace_server_address)

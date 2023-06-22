@@ -379,10 +379,10 @@ This generates the client certificates, if needed, and sends the necessary files
 
 ### Creation and configuration of container
 
-Then, on the VM where `podman` will be used, load the tools:
+Then, on the VM where `podman` will be used, prepare the workdir:
 
 ```bash
-./deploy_acmfg.sh
+./prepare_ace_workdir.sh
 ```
 
 This script performs the following steps:
@@ -463,6 +463,8 @@ This script performs the following steps:
   - server.conf.yaml
   - ACEmfg jar files
 
+> **Note:** if containers are stopped when you logout and get error: `error acquiring lock 0 for container`, then execute once: `loginctl enable-linger`, it is a known problem with podman and temp files cleanup.
+
 ### Policies to override parameters
 
 The location of the certificates for the OPCUA input node is copied from the data source JSON into the flow node configuration (and then lands in the bar file).
@@ -480,7 +482,12 @@ Proceed as follows:
   The name of the default source is `Source`
 - Set the policy type to `User Defined`, and create two keys: `SECURITY_CLIENT_CERT` and `SECURITY_CLIENT_PRIV_KEY` with the path to those files inside the container.
 - To tell the `IntegrationServer` to use this policy project, you can set the default policy project in `overrides/server.conf.yaml`.
-  The generated file here sets that value to `ContainerDeployment`.
+  The generated file here sets that value to `ContainerDeployment` in `server.conf.yaml`:
+
+```yaml
+Defaults:
+  policyProject: 'ContainerDeployment'
+```
 
 ### ACE: Create and Start container
 

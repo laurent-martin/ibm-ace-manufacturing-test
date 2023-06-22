@@ -22,13 +22,17 @@ aceserverconf(){
   sed --in-place=.bak --regexp-extended --expression="/^\s*${section}:/,/^$/ s|#?(${parameter}:) '[^']*'|\1 '${value}'|" $ace_host_work_directory/server.conf.yaml
 }
 create_container_ace(){
+    if test ! -e $ace_host_work_directory;then
+        echo "Work directory does not exist: $ace_host_work_directory" 1>&2
+        return 1
+    fi
     $container_engine create \
         --name $ace_container_name \
         --env LICENSE=accept \
-        --publish 7600:7600 \
-        --publish 7700:7700 \
-        --publish 7800:7800 \
-        --publish 7843:7843 \
+        --publish ${ace_port_admin}:${ace_port_admin} \
+        --publish ${ace_port_debug}:${ace_port_debug} \
+        --publish ${ace_port_http}:${ace_port_http} \
+        --publish ${ace_port_https}:${ace_port_https} \
         --volume $ace_host_work_directory:$ace_container_work_directory \
         --entrypoint=bash \
         $ace_image \

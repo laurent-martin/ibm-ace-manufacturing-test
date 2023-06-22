@@ -1,4 +1,7 @@
 ---
+ResourceManagers:
+  JVM:
+    jvmDebugPort: $ace_port_debug
 ConnectorProviders:
   # Ace Manufacturing configuration
   ACMfg:
