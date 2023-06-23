@@ -10,6 +10,7 @@ uabrowse -u ${opcua_server_url} -l 0 -d 10 -p 'Objects,2:OpcPlc,2:Telemetry'
 """
 
 import os
+import sys
 import asyncio
 from asyncua import Client, ua
 
@@ -30,9 +31,7 @@ async def browse(parent, path):
             await browse(node, child_path)
 
 
-async def main():
-    url = os.environ['opcua_server_url']
-    selection_filter = '0:Objects/2:OpcPlc/2:Telemetry'
+async def main(url, selection_filter):
     print(f"Connecting to {url} ...")
     async with Client(url=url) as client:
         path_selection = selection_filter.split("/")
@@ -40,4 +39,8 @@ async def main():
         await browse(selected_root, path_selection)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    if len(sys.argv) != 3:
+        print("Usage :   list_variables.py <opcua_server_url> <selection_filter>")
+        print("Example : list_variables.py $opcua_server_url 0:Objects/2:OpcPlc/2:Telemetry")
+        sys.exit(1)
+    asyncio.run(main(sys.argv[1], sys.argv[2]))
