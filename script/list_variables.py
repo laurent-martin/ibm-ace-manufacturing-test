@@ -13,10 +13,6 @@ import os
 import asyncio
 from asyncua import Client, ua
 
-url = os.environ['opcua_server_url']
-# index 2
-namespace = "http://microsoft.com/Opc/OpcPlc/"
-
 
 async def browse(parent, path):
     for node in await parent.get_children():
@@ -35,15 +31,13 @@ async def browse(parent, path):
 
 
 async def main():
+    url = os.environ['opcua_server_url']
+    selection_filter = '0:Objects/2:OpcPlc/2:Telemetry'
     print(f"Connecting to {url} ...")
     async with Client(url=url) as client:
-        # Find the namespace index
-        nsidx = await client.get_namespace_index(namespace)
-        print(f"Namespace Index for '{namespace}': {nsidx}")
-        # Get the variable node for read / write
-        myroot = ["0:Objects", f"{nsidx}:OpcPlc", f"{nsidx}:Telemetry"]
-        mynode = await client.nodes.root.get_child(myroot)
-        await browse(mynode, myroot)
+        path_selection = selection_filter.split("/")
+        selected_root = await client.nodes.root.get_child(path_selection)
+        await browse(selected_root, path_selection)
 
 if __name__ == "__main__":
     asyncio.run(main())
