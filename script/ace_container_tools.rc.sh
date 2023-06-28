@@ -3,7 +3,8 @@
 # This script is loaded in the shell with command "source"
 if test -z "$ace_container_name"; then
     set -a
-    source configuration.env
+    # script is "sourced", bash uses BASH_SOURCE, and zsh uses $0
+    source $(dirname "${BASH_SOURCE[0]:-$0}")/configuration.env
     set +a
 fi
 acedo(){
@@ -51,3 +52,4 @@ shopt -s expand_aliases
 # create command aliases on host, forwarded to container
 for c in createworkdir vault credentials setdbparms;do alias "mqsi$c=acedo mqsi$c";done
 alias keytool='acedo keytool'
+alias ibmint='acedo ibmint'
