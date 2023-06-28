@@ -3,7 +3,7 @@
 trap 'echo "ERROR: command failed";exit' ERR
 #set -x
 # load variables and helper aliases to run commands in container
-source ace_container_tools.rc.sh
+source "$(dirname $0)"/ace_container_tools.rc.sh
 if test -d "$ace_host_work_directory";then
     echo "Work directory already exists: $ace_host_work_directory" 1>&2
     exit 1
