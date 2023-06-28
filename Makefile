@@ -25,7 +25,7 @@ all::
 $(PRIVATEDIR)/configuration.env:
 	mkdir -p $(PRIVATEDIR)
 	@if test -e $(PRIVATEDIR)/configuration.env;then echo 'ERROR: conf file already exists: $@';exit 1;fi
-	cp configuration.tmpl.env $@
+	cp script/configuration.tmpl.env $@
 
 $(OUTDIR)/configuration.mak: $(PRIVATEDIR)/configuration.env
 	mkdir -p $(OUTDIR)
