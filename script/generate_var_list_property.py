@@ -39,15 +39,18 @@ async def find_all(parent, result: list = None, parent_path: list = []):
         attrs = await node.read_attributes(
             [
                 ua.AttributeIds.BrowseName,
-                ua.AttributeIds.NodeClass
+                ua.AttributeIds.NodeClass,
+                ua.AttributeIds.NodeId
             ]
         )
-        browse_name, child_class = [attr.Value.Value for attr in attrs]
+        browse_name, child_class, node_id = [
+            attr.Value.Value for attr in attrs]
         simple_name = browse_name.to_string().split(":")[-1]
         child_path = parent_path + [simple_name]
-        logging.debug(f"{simple_name} : {child_class} {len(result)}\n")
+        logging.debug(f"{simple_name} : {node_id}")
         if child_class == ua.NodeClass.Variable:
-            result.append("/".join(child_path))
+            result.append(
+                {"subpath": "/".join(child_path), "node_id": node_id.to_string()})
         else:
             await find_all(node, result, child_path)
     return result
@@ -59,7 +62,7 @@ async def get_node_list_for_path(url, selection_filter):
         logging.info(f"Connected.")
         path_selection = selection_filter.split("/")
         selected_root = await client.nodes.root.get_child(path_selection)
-        logging.info(f"Root node found.")
+        logging.info(f"Root node found: {selected_root.nodeid.to_string()}")
         return await find_all(selected_root)
 
 
@@ -104,7 +107,7 @@ def replace_tag(tagname, text, value):
     return re.sub(rf'{tagname}="([^"]+)"', f'{tagname}="{value}"', text)
 
 
-def get_source_props(root_path: str, item_subpath: str, namespace_str: str, namespace_int: int = 2, client_item_root: str = 'Item'):
+def get_source_props(root_path: str, item_subpath: str, item_id: str, namespace_str: str, namespace_int: int = 2, client_item_root: str = 'Item'):
     """
     Get source properties for one item
     Args:
@@ -123,7 +126,7 @@ def get_source_props(root_path: str, item_subpath: str, namespace_str: str, name
     # /Item/Telemetry/Fast/FastDouble1
     mapping_path = '/'.join(["", client_item_root,
                             last_one]+item_subpath_array)
-    logging.info(f"Mapping path: {mapping_path}")
+    logging.debug(f"Item: {mapping_path} : {item_id}")
     return {
         "EVENT_LIST": False,
         "HAS_HISTORY": False,
@@ -133,7 +136,7 @@ def get_source_props(root_path: str, item_subpath: str, namespace_str: str, name
         "MAPPING_PATH": mapping_path,
         "METHOD_LIST": "false",
         "SAMPLE_RATE": 0,
-        "SOURCE_ITEM_ADDR": f"ns={namespace_int};s={item_subpath_array[-1]}",
+        "SOURCE_ITEM_ADDR": item_id,
         "SOURCE_ITEM_NS": namespace_str,
         "SOURCE_ITEM_PATH": source_item_path,
         "SOURCE_PATH": SOURCE_DEFAULT_ROOT,
@@ -149,20 +152,19 @@ def override_property_line(flow_name: str, node_name: str, prop_name: str, prop_
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("--loglvl", help="log level", type=int, default=30)
     parser.add_argument("flow", help="flow name")
     parser.add_argument("node", help="node name")
     parser.add_argument("url", help="OPC UA server URL")
     parser.add_argument("path", help="root of dump")
     parser.add_argument(
         "namespace", help="namespace, e.g. http://microsoft.com/Opc/OpcPlc/")
-    logging.basicConfig(level=logging.WARNING)
     args = parser.parse_args()
-    all_nodes = asyncio.run(get_node_list_for_path(args.url, args.path))
-    logging.info(f"Found {len(all_nodes)} variables:")
-    for node in all_nodes:
-        logging.debug(f"  {node}")
+    logging.basicConfig(level=args.loglvl)
+    nodes_descr = asyncio.run(get_node_list_for_path(args.url, args.path))
+    logging.info(f"Found {len(nodes_descr)} variables")
     source_item_list1 = [get_source_props(
-        args.path, node_subpath, args.namespace) for node_subpath in all_nodes]
+        args.path, node['subpath'], node['node_id'], args.namespace) for node in nodes_descr]
     print(override_property_line(args.flow, args.node, PROP_TRIGGER,
                                  trigger_list_to_property(source_item_list1)))
 
