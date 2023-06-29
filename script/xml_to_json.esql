@@ -1,0 +1,105 @@
+
+
+CREATE COMPUTE MODULE OPCUA_process_Compute
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		--CALL CopyMessageHeaders();
+		--CALL CopyEntireMessage();
+		-- namespaces
+		DECLARE tie NAMESPACE 'com.ibm.acmfg.TriggerItemEvent/v1.0';
+		DECLARE tit NAMESPACE 'com.ibm.acmfg.TriggerItem/v1.0';
+		DECLARE cit NAMESPACE 'com.ibm.acmfg.ClientItem/v1.0';
+		DECLARE civ NAMESPACE 'com.ibm.acmfg.ClientItemValue/v1.0';
+		-- variables
+		DECLARE I INTEGER 1;
+		DECLARE nb_items INTEGER 0;
+		DECLARE value CHARACTER '';
+		DECLARE simple_type CHARACTER '';
+		DECLARE cast_value CHARACTER '';
+
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+		-- array JSON
+		CREATE FIELD OutputRoot.JSON.Data IDENTITY (JSON.Array)Data;
+		-- transformation
+		SET nb_items = CARDINALITY(InputRoot.XMLNSC.tie:Triggers.tie:Trigger[]);
+		WHILE I <= nb_items DO
+			DECLARE ref REFERENCE TO InputRoot.XMLNSC.tie:Triggers.tie:Trigger[I].tie:Item;
+			SET value = ref.cit:Value.civ:Data;
+			-- number, boolean, string, object
+			CASE ref.cit:Value.civ:IIBType
+			WHEN 'java.lang.Long' THEN
+				SET simple_type = 'number';
+				SET cast_value = CAST(value AS INTEGER );
+			WHEN 'java.lang.Integer' THEN
+				SET simple_type = 'number';
+				SET cast_value = CAST(value AS INTEGER );
+			WHEN 'java.lang.Short' THEN
+				SET simple_type = 'number';
+				SET cast_value = CAST(value AS INTEGER );
+			WHEN 'java.lang.Double' THEN
+				SET simple_type = 'number';
+				--SET cast_value = CAST(CAST(value AS FLOAT)AS DECIMAL);
+				SET cast_value = CAST(value AS FLOAT);
+			WHEN 'java.lang.Float' THEN
+				SET simple_type = 'number';
+				SET cast_value = CAST(value AS FLOAT);
+			WHEN 'java.lang.Boolean' THEN
+				SET simple_type = 'boolean';
+				SET cast_value = CAST(value AS BOOLEAN );
+			WHEN 'java.math.BigDecimal' THEN
+				SET simple_type = 'number';
+				SET cast_value = CAST(value AS DECIMAL );
+			WHEN 'java.lang.String' THEN
+				SET simple_type = 'string';
+				SET cast_value = CAST(value AS CHARACTER );
+			WHEN 'java.util.GregorianCalendar' THEN
+				SET simple_type = 'todo';
+				SET value= CAST(value AS CHARACTER FORMAT 'yyyy-MM-dd HH:mm:ss.SSS');
+			WHEN 'byte[]' THEN
+				SET simple_type = 'todo';
+				SET cast_value = CAST(value AS BLOB );
+			WHEN 'java.util.BitSet' THEN
+				SET simple_type = 'todo';
+				SET cast_value = CAST(value AS BIT );
+			WHEN 'com.ibm.broker.plugin.MbDate' THEN
+				SET simple_type = 'todo';
+				SET cast_value = CAST(value AS DATE );
+			WHEN 'com.ibm.broker.plugin.MbTime' THEN
+				SET simple_type = 'todo';
+				SET cast_value = CAST(value AS TIME );
+			WHEN 'com.ibm.broker.plugin.MbTime' THEN
+				SET simple_type = 'todo';
+				SET cast_value = CAST(value AS GMTTIME );
+			WHEN 'com.ibm.broker.plugin.MbTimestamp' THEN
+				SET simple_type = 'todo';
+				SET cast_value = CAST(value AS CHARACTER FORMAT 'yyyy-MM-dd HH:mm:ss.SSS');
+			ELSE
+				SET simple_type = 'Unknown Type: '||ref.cit:Value.civ:IIBType;
+				SET cast_value ='none';
+			END CASE;
+			--SET OutputRoot.JSON.Data.Item[I].topic = ref.cit:name;
+			SET OutputRoot.JSON.Data.Item[I].topic = ref.cit:Source;
+			SET OutputRoot.JSON.Data.Item[I].payload = ref.cit:Value.civ:Data;
+			SET OutputRoot.JSON.Data.Item[I].type = simple_type;
+			SET OutputRoot.JSON.Data.Item[I].sourceTimestamp = ref.cit:Value.civ:SourceTime;
+			SET OutputRoot.JSON.Data.Item[I].serverTimestamp = ref.cit:Value.civ:ServerTime;
+
+			SET I = I + 1;
+
+		END WHILE;
+
+		RETURN TRUE;
+	END;
+	CREATE PROCEDURE CopyMessageHeaders() BEGIN
+		DECLARE I INTEGER 1;
+		DECLARE J INTEGER;
+		SET J = CARDINALITY(InputRoot.*[]);
+		WHILE I < J DO
+			SET OutputRoot.*[I] = InputRoot.*[I];
+			SET I = I + 1;
+		END WHILE;
+	END;
+	CREATE PROCEDURE CopyEntireMessage() BEGIN
+		SET OutputRoot = InputRoot;
+	END;
+END MODULE;
