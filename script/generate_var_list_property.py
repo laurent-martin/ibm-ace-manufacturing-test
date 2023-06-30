@@ -30,12 +30,13 @@ PROP_SERVER = 'opcUaServerList'
 SOURCE_ROOT_UUID = "00000000-0000-1000-8000-000000000002"
 # Default source path
 SOURCE_DEFAULT_ROOT = "/Source"
+# Default client item path
 CLIENT_DEFAULT_ROOT = "/Item"
 
 
 async def find_all(parent, result: list = None, parent_path: list = []):
     """
-    The result returns the sub path part only without namespace, e.g. ['f1/m1','f1/m2]
+    :return: list of items under specified parent node with format: {"subpath": "the/sub/path", "node_id": "ns=2; the node id"}
     """
     if result is None:
         result = []
@@ -61,6 +62,9 @@ async def find_all(parent, result: list = None, parent_path: list = []):
 
 
 async def get_node_list_for_path(url, selection_filter):
+    """
+    :return: list of items under the specified path using format of find_all
+    """
     logging.info(f"Connecting to {url} ...")
     async with Client(url=url) as client:
         logging.info(f"Connected.")
@@ -75,7 +79,6 @@ def item_to_uri_params(info: dict):
     Encode info dict to URI
     Args:
         info: one source or server information
-        suffix: suffix to add to URI, empty for server, '|||' for source
     """
     suffix = ""
     if 'SOURCE_ITEM_ADDR' in info:
@@ -91,29 +94,18 @@ def item_to_uri_params(info: dict):
 
 
 def trigger_list_to_property(item_list):
-    """Convert list of items in dict to property triggerItemList"""
+    """
+    Convert list of items in dict to property value string suitable for triggerItemList
+    """
     src_list = ["4"]
     for item in item_list:
         src_list.append(item_to_uri_params(item))
     return ','.join(src_list)
 
 
-def get_tag_value(tagname, text):
-    """get first match for property in xml"""
-    match = re.search(rf'{tagname}="([^"]+)"', text)
-    if not match:
-        raise Exception("No match in flow")
-    return match.group(1)
-
-
-def replace_tag(tagname, text, value):
-    """replace first match"""
-    return re.sub(rf'{tagname}="([^"]+)"', f'{tagname}="{value}"', text)
-
-
 def get_source_props(root_path: str, item_subpath: str, item_id: str, namespace_str: str, namespace_int: int = 2, client_item_root: str = 'Item'):
     """
-    Get source properties for one item
+    :return: dict of source properties for one item
     Args:
         root_path: root path of source, e.g. '0:Objects/2:OpcPlc/2:Telemetry'
         item_subpath: subpath of item, e.g. 'Fast/FastDouble1'
@@ -150,7 +142,9 @@ def get_source_props(root_path: str, item_subpath: str, item_id: str, namespace_
 
 
 def override_property_line(flow_name: str, node_name: str, prop_name: str, prop_value: str):
-    """Write property to file"""
+    """
+    one line of override property file suitable for ibmint apply overrides
+    """
     return f"{flow_name}#{node_name}.{prop_name}={prop_value}\n"
 
 
