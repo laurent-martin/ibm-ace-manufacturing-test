@@ -6,21 +6,20 @@ https://github.com/FreeOpcUa/opcua-asyncio
 
 https://github.com/FreeOpcUa/opcua-client-gui
 
-uabrowse -u ${opcua_server_url} -l 0 -d 10 -p 'Objects,2:OpcPlc,2:Telemetry'
+uabrowse -u $opcua_server_url -l 0 -d 10 -p 'Objects,2:OpcPlc,2:Telemetry'
 
-./generate_var_list_property.py 'OPCUA_process' 'OPC-UA-Input' $opcua_server_url 0:Objects/2:OpcPlc/2:Telemetry/2:Basic http://microsoft.com/Opc/OpcPlc/
-
+./script/generate_var_list_property.py --flow OPCUA_process --node OPC-UA-Input --url $opcua_server_url --root 0:Objects/2:OpcPlc/2:Telemetry
+--excludes '["Special/","ABCDEFGH"]'
 ibmint apply overrides $ace_container_work_directory/abc.txt --work-directory $ace_container_work_directory
 """
 
-import os
 import re
-import sys
+import json
+import uuid
 import asyncio
 import argparse
 import logging
 import urllib.parse
-import uuid
 from asyncua import Client, ua
 
 # properties in message flow XML
@@ -34,7 +33,7 @@ SOURCE_DEFAULT_ROOT = "/Source"
 CLIENT_DEFAULT_ROOT = "/Item"
 
 
-async def find_all(parent, result: list = None, parent_path: list = []):
+async def find_all(parent, excludes=None, result: list = None, parent_path: list = []):
     """
     :return: list of items under specified parent node with format: {"subpath": "the/sub/path", "node_id": "ns=2; the node id"}
     """
@@ -44,34 +43,48 @@ async def find_all(parent, result: list = None, parent_path: list = []):
         attrs = await node.read_attributes(
             [
                 ua.AttributeIds.BrowseName,
-                ua.AttributeIds.NodeClass,
-                ua.AttributeIds.NodeId
+                ua.AttributeIds.NodeId,
+                ua.AttributeIds.NodeClass
             ]
         )
-        browse_name, child_class, node_id = [
+        browse_name, node_id, child_class = [
             attr.Value.Value for attr in attrs]
         simple_name = browse_name.to_string().split(":")[-1]
         child_path = parent_path + [simple_name]
-        logging.debug(f"{simple_name} : {node_id}")
+        sub_path = "/".join(child_path)
+        identifier = node_id.to_string()
+        to_exclude = False
+        for test_re in excludes:
+            if re.match(test_re, sub_path):
+                to_exclude = True
+                break
+        if to_exclude:
+            logging.info(f"excluding {sub_path} : {identifier}")
+            continue
         if child_class == ua.NodeClass.Variable:
+            logging.info(f"adding {sub_path} : {identifier}")
             result.append(
-                {"subpath": "/".join(child_path), "node_id": node_id.to_string()})
+                {"subpath": sub_path, "node_id": identifier})
         else:
-            await find_all(node, result, child_path)
+            logging.info(f"browsing {sub_path} : {identifier}")
+            await find_all(node, excludes, result, child_path)
     return result
 
 
-async def get_node_list_for_path(url, selection_filter):
+async def get_node_list_for_path(url, selection_filter, excludes):
     """
     :return: list of items under the specified path using format of find_all
     """
     logging.info(f"Connecting to {url} ...")
     async with Client(url=url) as client:
         logging.info(f"Connected.")
+        ua.NodeId,
         path_selection = selection_filter.split("/")
         selected_root = await client.nodes.root.get_child(path_selection)
+        namespaces = await client.get_namespace_array()
         logging.info(f"Root node found: {selected_root.nodeid.to_string()}")
-        return await find_all(selected_root)
+        all_items = await find_all(parent=selected_root, excludes=excludes)
+        return {"namespaces": namespaces, "items": all_items, "root_ns_index": selected_root.nodeid.NamespaceIndex}
 
 
 def item_to_uri_params(info: dict):
@@ -103,14 +116,16 @@ def trigger_list_to_property(item_list):
     return ','.join(src_list)
 
 
-def get_source_props(root_path: str, item_subpath: str, item_id: str, namespace_str: str, namespace_int: int = 2, client_item_root: str = 'Item'):
+def get_source_props(root_path: str, item_subpath: str, item_id: str, namespaces: list, namespace_int: int, client_item_root: str):
     """
     :return: dict of source properties for one item
     Args:
         root_path: root path of source, e.g. '0:Objects/2:OpcPlc/2:Telemetry'
         item_subpath: subpath of item, e.g. 'Fast/FastDouble1'
-        namespace_str: namespace string, e.g. 'http://microsoft.com/Opc/OpcPlc/'
+        item_id: node id of item, e.g. 'ns=2;s=FastDouble1'
+        namespaces: list of namespaces, e.g. ['http://opcfoundation.org/UA/', 'http://microsoft.com/Opc/OpcPlc/']
         namespace_int: namespace index, e.g. 2
+        client_item_root: root path of client item, e.g. '/Item'
     """
     item_subpath_array = item_subpath.split('/')
     # last group in path
@@ -120,8 +135,7 @@ def get_source_props(root_path: str, item_subpath: str, item_id: str, namespace_
                                 f"{namespace_int}:{item}" for item in item_subpath_array])
     logging.info(f"Source item path: {source_item_path}")
     # /Item/Telemetry/Fast/FastDouble1
-    mapping_path = '/'.join(["", client_item_root,
-                            last_one]+item_subpath_array)
+    mapping_path = '/'.join([client_item_root, last_one]+item_subpath_array)
     logging.debug(f"Item: {mapping_path} : {item_id}")
     return {
         "EVENT_LIST": False,
@@ -133,7 +147,7 @@ def get_source_props(root_path: str, item_subpath: str, item_id: str, namespace_
         "METHOD_LIST": "false",
         "SAMPLE_RATE": 0,
         "SOURCE_ITEM_ADDR": item_id,
-        "SOURCE_ITEM_NS": namespace_str,
+        "SOURCE_ITEM_NS": namespaces[namespace_int],
         "SOURCE_ITEM_PATH": source_item_path,
         "SOURCE_PATH": SOURCE_DEFAULT_ROOT,
         "SOURCE_REF": SOURCE_ROOT_UUID,
@@ -151,18 +165,28 @@ def override_property_line(flow_name: str, node_name: str, prop_name: str, prop_
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--loglvl", help="log level", type=int, default=30)
-    parser.add_argument("flow", help="flow name")
-    parser.add_argument("node", help="node name")
-    parser.add_argument("url", help="OPC UA server URL")
-    parser.add_argument("path", help="root of dump")
+    parser.add_argument("--flow", help="flow name", type=str, required=True)
+    parser.add_argument("--node", help="node name", type=str, required=True)
+    parser.add_argument("--url", help="OPC UA server URL",
+                        type=str, required=True)
+    parser.add_argument("--root", help="root path", type=str, default=None)
     parser.add_argument(
-        "namespace", help="namespace, e.g. http://microsoft.com/Opc/OpcPlc/")
+        "--excludes", help="filter JSON with regex to exclude", type=json.loads, default=None)
     args = parser.parse_args()
     logging.basicConfig(level=args.loglvl)
-    nodes_descr = asyncio.run(get_node_list_for_path(args.url, args.path))
-    logging.info(f"Found {len(nodes_descr)} variables")
+    excludes = []
+    if args.excludes is not None:
+        for filter in args.excludes:
+            excludes.append(re.compile(filter))
+    namespaces_items = asyncio.run(
+        get_node_list_for_path(args.url, args.root, excludes))
+    logging.info(f"Found {len(namespaces_items['items'])} variables")
     source_item_list1 = [get_source_props(
-        args.path, node['subpath'], node['node_id'], args.namespace) for node in nodes_descr]
+        root_path=args.root,
+        item_subpath=node['subpath'],
+        item_id=node['node_id'],
+        namespaces=namespaces_items["namespaces"],
+        namespace_int=namespaces_items["root_ns_index"],
+        client_item_root=CLIENT_DEFAULT_ROOT) for node in namespaces_items["items"]]
     print(override_property_line(args.flow, args.node, PROP_TRIGGER,
                                  trigger_list_to_property(source_item_list1)))
-
