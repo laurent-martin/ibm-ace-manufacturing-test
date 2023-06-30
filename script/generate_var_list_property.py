@@ -7,6 +7,10 @@ https://github.com/FreeOpcUa/opcua-asyncio
 https://github.com/FreeOpcUa/opcua-client-gui
 
 uabrowse -u ${opcua_server_url} -l 0 -d 10 -p 'Objects,2:OpcPlc,2:Telemetry'
+
+./generate_var_list_property.py 'OPCUA_process' 'OPC-UA-Input' $opcua_server_url 0:Objects/2:OpcPlc/2:Telemetry/2:Basic http://microsoft.com/Opc/OpcPlc/
+
+ibmint apply overrides $ace_container_work_directory/abc.txt --work-directory $ace_container_work_directory
 """
 
 import os
@@ -168,5 +172,3 @@ if __name__ == "__main__":
     print(override_property_line(args.flow, args.node, PROP_TRIGGER,
                                  trigger_list_to_property(source_item_list1)))
 
-# ./generate_var_list_property.py 'OPCUA_process' 'OPC-UA-Input' $opcua_server_url 0:Objects/2:OpcPlc/2:Telemetry/2:Basic http://microsoft.com/Opc/OpcPlc/
-# ibmint apply overrides $ace_container_work_directory/abc.txt --work-directory $ace_container_work_directory
