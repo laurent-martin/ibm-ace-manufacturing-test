@@ -463,7 +463,7 @@ This script performs the following steps:
   - server.conf.yaml
   - ACEmfg jar files
 
-> **Note:** if containers are stopped when you logout and get error: `error acquiring lock 0 for container`, then execute once: `loginctl enable-linger`, it is a known problem with podman and temp files cleanup.
+> **Note:** If containers are stopped when you logout and get error: `error acquiring lock 0 for container`. By default Linux would free resources when users logout. To avoid this, execute once: `loginctl enable-linger`.
 
 ### Policies to override parameters
 

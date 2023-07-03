@@ -3,7 +3,7 @@
 # exit on any error (set -e)
 trap 'echo "ERROR: command failed";exit' ERR
 # load config
-source configuration.env
+source "$(dirname $0)"/configuration.env
 # folder where this script is located
 host_main_folder=$(realpath $(dirname "$0"))/
 # (fixed value) path in the container image (WORKDIR)

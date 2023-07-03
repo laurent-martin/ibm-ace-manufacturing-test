@@ -70,44 +70,66 @@ doc: README.pdf
 ###################################
 # OPCUA Simulator
 
-OPC_ARCHIVE=\
-	  $(SCRIPTDIR)/create_container_opcplc.sh \
-	  $(PRIVATEDIR)/configuration.env \
-	  $(OUTDIR)/$(cert_pem)
+OPC_ARCHIVE_LIST=\
+	$(SCRIPTDIR)/create_container_opcplc.sh \
+	$(PRIVATEDIR)/configuration.env \
+	$(OUTDIR)/$(cert_pem)
+OPC_ARCHIVE_FILE=opc_server_files.tgz
+OPC_HOST_FOLDER=opc_files
 
 # build files to send to opc simulator
-build_opcplc: $(OUTDIR)/opc_server_files.tgz
+build_opcplc: $(OUTDIR)/$(OPC_ARCHIVE_FILE)
 # GNU tar required here
-$(OUTDIR)/opc_server_files.tgz: $(OPC_ARCHIVE)
+$(OUTDIR)/$(OPC_ARCHIVE_FILE): $(OPC_ARCHIVE_LIST)
 	chmod a+x $(SCRIPTDIR)/create_container_opcplc.sh
-	$(TAR) -c -v -z -f $@ --transform='s|.*/||' $(OPC_ARCHIVE)
+	$(TAR) -c -v -z -f $@ --transform='s|.*/||' $(OPC_ARCHIVE_LIST)
 # send files to simulator host
-deploy_opcplc: $(OUTDIR)/opc_server_files.tgz
-	scp $(OUTDIR)/opc_server_files.tgz $(opcua_server_address):
-	ssh $(opcua_server_address) 'rm -fr opc_files && mkdir -p opc_files && tar --directory=opc_files -x -v -z -f opc_server_files.tgz && rm -f opc_server_files.tgz'
+deploy_opcplc: $(OUTDIR)/$(OPC_ARCHIVE_FILE)
+	scp $(OUTDIR)/$(OPC_ARCHIVE_FILE) $(opcua_server_address):
+	ssh $(opcua_server_address) 'rm -fr $(OPC_HOST_FOLDER) && mkdir -p $(OPC_HOST_FOLDER) && tar --directory=$(OPC_HOST_FOLDER) -x -v -z -f $(OPC_ARCHIVE_FILE) && rm -f $(OPC_ARCHIVE_FILE)'
 ssh_opcplc:
 	ssh $(opcua_server_address)
 
 ###################################
 # ACE
 
-ACE_ARCHIVE=$(SCRIPTDIR)/ace_container_tools.rc.sh \
-$(SCRIPTDIR)/prepare_ace_workdir.sh \
-$(SCRIPTDIR)/server.conf.tmpl.yaml \
-$(PRIVATEDIR)/configuration.env \
-$(PRIVATEDIR)/$(acmfg_tar) \
-$(OUTDIR)/$(cert_pem) \
-$(OUTDIR)/$(cert_p12)
+ACE_ARCHIVE_LIST=\
+	$(SCRIPTDIR)/ace_container_tools.rc.sh \
+	$(SCRIPTDIR)/prepare_ace_workdir.sh \
+	$(SCRIPTDIR)/server.conf.tmpl.yaml \
+	$(PRIVATEDIR)/configuration.env \
+	$(PRIVATEDIR)/$(acmfg_tar) \
+	$(OUTDIR)/$(cert_pem) \
+	$(OUTDIR)/$(cert_p12)
+ACE_ARCHIVE_FILE=ace_server_files.tgz
+ACE_HOST_FOLDER=ace_files
 
 # generate files to integration server host
-build_ace: $(OUTDIR)/ace_server_files.tgz
+build_ace: $(OUTDIR)/$(ACE_ARCHIVE_FILE)
 # build a flat archive with files to transfer
-$(OUTDIR)/ace_server_files.tgz: $(ACE_ARCHIVE)
+$(OUTDIR)/$(ACE_ARCHIVE_FILE): $(ACE_ARCHIVE_LIST)
 	chmod a+x $(SCRIPTDIR)/prepare_ace_workdir.sh
-	$(TAR) -c -v -z -f $@ --transform='s|.*/||' $(ACE_ARCHIVE)
+	$(TAR) -c -v -z -f $@ --transform='s|.*/||' $(ACE_ARCHIVE_LIST)
 # send files to ace host
-deploy_ace: $(OUTDIR)/ace_server_files.tgz
-	scp $(OUTDIR)/ace_server_files.tgz $(ace_server_address):
-	ssh $(ace_server_address) 'rm -fr ace_files && mkdir -p ace_files && tar --directory=ace_files -x -v -z -f ace_server_files.tgz && rm -f ace_server_files.tgz'
+deploy_ace: $(OUTDIR)/$(ACE_ARCHIVE_FILE)
+	scp $(OUTDIR)/$(ACE_ARCHIVE_FILE) $(ace_server_address):
+	ssh $(ace_server_address) "rm -fr $(ACE_HOST_FOLDER) && mkdir -p $(ACE_HOST_FOLDER) && tar --directory=$(ACE_HOST_FOLDER) -x -v -z -f $(ACE_ARCHIVE_FILE) && rm -f $(ACE_ARCHIVE_FILE)"
 ssh_ace:
 	ssh $(ace_server_address)
+
+###################################
+# Mosquitto
+MQTT_ARCHIVE_LIST=\
+	$(SCRIPTDIR)/mosquitto.sh \
+	$(SCRIPTDIR)/mosquitto.conf \
+	$(PRIVATEDIR)/configuration.env
+MQTT_ARCHIVE_FILE=mosquitto_files.tgz
+MQTT_HOST_FOLDER=mosquitto
+# build a flat archive with files to transfer
+build_mqtt: $(OUTDIR)/$(MQTT_ARCHIVE_FILE)
+$(OUTDIR)/$(MQTT_ARCHIVE_FILE): $(MQTT_ARCHIVE_LIST)
+	chmod a+x $(SCRIPTDIR)/mosquitto.sh
+	$(TAR) -c -v -z -f $@ --transform='s|.*/||' $(MQTT_ARCHIVE_LIST)
+deploy_mqtt: $(OUTDIR)/$(MQTT_ARCHIVE_FILE)
+	scp $(OUTDIR)/$(MQTT_ARCHIVE_FILE) $(mosquitto_server_address):
+	ssh $(mosquitto_server_address) "rm -fr $(MQTT_HOST_FOLDER) && mkdir -p $(MQTT_HOST_FOLDER) && tar --directory=$(MQTT_HOST_FOLDER) -x -v -z -f $(MQTT_ARCHIVE_FILE) && rm -f $(MQTT_ARCHIVE_FILE)"
