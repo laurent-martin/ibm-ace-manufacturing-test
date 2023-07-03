@@ -6,11 +6,15 @@ https://github.com/FreeOpcUa/opcua-asyncio
 
 https://github.com/FreeOpcUa/opcua-client-gui
 
+sudo dnf install -y python39
+
+pip3 install --user asyncua
+
 uabrowse -u $opcua_server_url -l 0 -d 10 -p 'Objects,2:OpcPlc,2:Telemetry'
 
-./script/generate_var_list_property.py --flow OPCUA_process --node OPC-UA-Input --url $opcua_server_url --root 0:Objects/2:OpcPlc/2:Telemetry
+./generate_var_list_property.py --flow OPCUA_process --node OPC-UA-Input --url $opcua_server_url --root 0:Objects/2:OpcPlc/2:Telemetry --out $ace_host_work_directory/ua_overrides.txt
 --excludes '["Special/","ABCDEFGH"]'
-ibmint apply overrides $ace_container_work_directory/abc.txt --work-directory $ace_container_work_directory
+ibmint apply overrides $ace_container_work_directory/ua_overrides.txt --work-directory $ace_container_work_directory
 """
 
 import re
@@ -23,8 +27,8 @@ import urllib.parse
 from asyncua import Client, ua
 
 # properties in message flow XML
-PROP_TRIGGER = 'triggerItemList'
-PROP_SERVER = 'opcUaServerList'
+PROP_TRIGGER = "triggerItemList"
+PROP_SERVER = "opcUaServerList"
 # default source uuid
 SOURCE_ROOT_UUID = "00000000-0000-1000-8000-000000000002"
 # Default source path
@@ -44,11 +48,10 @@ async def find_all(parent, excludes=None, result: list = None, parent_path: list
             [
                 ua.AttributeIds.BrowseName,
                 ua.AttributeIds.NodeId,
-                ua.AttributeIds.NodeClass
+                ua.AttributeIds.NodeClass,
             ]
         )
-        browse_name, node_id, child_class = [
-            attr.Value.Value for attr in attrs]
+        browse_name, node_id, child_class = [attr.Value.Value for attr in attrs]
         simple_name = browse_name.to_string().split(":")[-1]
         child_path = parent_path + [simple_name]
         sub_path = "/".join(child_path)
@@ -59,14 +62,13 @@ async def find_all(parent, excludes=None, result: list = None, parent_path: list
                 to_exclude = True
                 break
         if to_exclude:
-            logging.info(f"excluding {sub_path} : {identifier}")
+            logging.debug(f"excluding {sub_path} : {identifier}")
             continue
         if child_class == ua.NodeClass.Variable:
-            logging.info(f"adding {sub_path} : {identifier}")
-            result.append(
-                {"subpath": sub_path, "node_id": identifier})
+            logging.debug(f"adding {sub_path} : {identifier}")
+            result.append({"subpath": sub_path, "node_id": identifier})
         else:
-            logging.info(f"browsing {sub_path} : {identifier}")
+            logging.debug(f"browsing {sub_path} : {identifier}")
             await find_all(node, excludes, result, child_path)
     return result
 
@@ -84,7 +86,11 @@ async def get_node_list_for_path(url, selection_filter, excludes):
         namespaces = await client.get_namespace_array()
         logging.info(f"Root node found: {selected_root.nodeid.to_string()}")
         all_items = await find_all(parent=selected_root, excludes=excludes)
-        return {"namespaces": namespaces, "items": all_items, "root_ns_index": selected_root.nodeid.NamespaceIndex}
+        return {
+            "namespaces": namespaces,
+            "items": all_items,
+            "root_ns_index": selected_root.nodeid.NamespaceIndex,
+        }
 
 
 def item_to_uri_params(info: dict):
@@ -94,16 +100,18 @@ def item_to_uri_params(info: dict):
         info: one source or server information
     """
     suffix = ""
-    if 'SOURCE_ITEM_ADDR' in info:
-        suffix = '|||'
+    if "SOURCE_ITEM_ADDR" in info:
+        suffix = "|||"
     encoded_pairs = []
     for key, value in info.items():
         if isinstance(value, str):
-            value = urllib.parse.quote(str(value), safe=':/;#[] *')
+            value = urllib.parse.quote(str(value), safe=":/;#[] *")
         else:
             value = str(value).lower()
         encoded_pairs.append(f"{key}={value}")
-    return f"{info['MAPPING_ID']}:{info['MAPPING_PATH']}?{'$'.join(encoded_pairs)}{suffix}"
+    return (
+        f"{info['MAPPING_ID']}:{info['MAPPING_PATH']}?{'$'.join(encoded_pairs)}{suffix}"
+    )
 
 
 def trigger_list_to_property(item_list):
@@ -113,10 +121,17 @@ def trigger_list_to_property(item_list):
     src_list = ["4"]
     for item in item_list:
         src_list.append(item_to_uri_params(item))
-    return ','.join(src_list)
+    return ",".join(src_list)
 
 
-def get_source_props(root_path: str, item_subpath: str, item_id: str, namespaces: list, namespace_int: int, client_item_root: str):
+def get_source_props(
+    root_path: str,
+    item_subpath: str,
+    item_id: str,
+    namespaces: list,
+    namespace_int: int,
+    client_item_root: str,
+):
     """
     :return: dict of source properties for one item
     Args:
@@ -127,15 +142,16 @@ def get_source_props(root_path: str, item_subpath: str, item_id: str, namespaces
         namespace_int: namespace index, e.g. 2
         client_item_root: root path of client item, e.g. '/Item'
     """
-    item_subpath_array = item_subpath.split('/')
+    item_subpath_array = item_subpath.split("/")
     # last group in path
-    last_one = root_path.split('/')[-1].split(':')[1]
+    last_one = root_path.split("/")[-1].split(":")[1]
     # /Objects/2:OpcPlc/2:Telemetry/2:Fast/2:FastDouble1
-    source_item_path = '/'.join([root_path] + [
-                                f"{namespace_int}:{item}" for item in item_subpath_array])
-    logging.info(f"Source item path: {source_item_path}")
+    source_item_path = "/".join(
+        [root_path] + [f"{namespace_int}:{item}" for item in item_subpath_array]
+    )
+    logging.debug(f"Source item path: {source_item_path}")
     # /Item/Telemetry/Fast/FastDouble1
-    mapping_path = '/'.join([client_item_root, last_one]+item_subpath_array)
+    mapping_path = "/".join([client_item_root, last_one] + item_subpath_array)
     logging.debug(f"Item: {mapping_path} : {item_id}")
     return {
         "EVENT_LIST": False,
@@ -151,11 +167,13 @@ def get_source_props(root_path: str, item_subpath: str, item_id: str, namespaces
         "SOURCE_ITEM_PATH": source_item_path,
         "SOURCE_PATH": SOURCE_DEFAULT_ROOT,
         "SOURCE_REF": SOURCE_ROOT_UUID,
-        "VERSION_TIME": "2023-06-09T07:29:29.380+0000"
+        "VERSION_TIME": "2023-06-09T07:29:29.380+0000",
     }
 
 
-def override_property_line(flow_name: str, node_name: str, prop_name: str, prop_value: str):
+def override_property_line(
+    flow_name: str, node_name: str, prop_name: str, prop_value: str
+):
     """
     one line of override property file suitable for ibmint apply overrides
     """
@@ -164,29 +182,54 @@ def override_property_line(flow_name: str, node_name: str, prop_name: str, prop_
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--loglvl", help="log level", type=int, default=30)
+    parser.add_argument(
+        "--debug",
+        help="log level, debug=10, info=20, warning=30 (default)",
+        type=int,
+        default=30,
+    )
     parser.add_argument("--flow", help="flow name", type=str, required=True)
     parser.add_argument("--node", help="node name", type=str, required=True)
-    parser.add_argument("--url", help="OPC UA server URL",
-                        type=str, required=True)
+    parser.add_argument("--out", help="output file name", type=str, required=True)
+    parser.add_argument("--max", help="max number of items", type=int)
+    parser.add_argument("--url", help="OPC UA server URL", type=str, required=True)
     parser.add_argument("--root", help="root path", type=str, default=None)
     parser.add_argument(
-        "--excludes", help="filter JSON with regex to exclude", type=json.loads, default=None)
+        "--excludes",
+        help="filter JSON with regex to exclude",
+        type=json.loads,
+        default=None,
+    )
     args = parser.parse_args()
-    logging.basicConfig(level=args.loglvl)
+    logging.basicConfig(level=args.debug)
     excludes = []
     if args.excludes is not None:
         for filter in args.excludes:
             excludes.append(re.compile(filter))
     namespaces_items = asyncio.run(
-        get_node_list_for_path(args.url, args.root, excludes))
+        get_node_list_for_path(args.url, args.root, excludes)
+    )
     logging.info(f"Found {len(namespaces_items['items'])} variables")
-    source_item_list1 = [get_source_props(
-        root_path=args.root,
-        item_subpath=node['subpath'],
-        item_id=node['node_id'],
-        namespaces=namespaces_items["namespaces"],
-        namespace_int=namespaces_items["root_ns_index"],
-        client_item_root=CLIENT_DEFAULT_ROOT) for node in namespaces_items["items"]]
-    print(override_property_line(args.flow, args.node, PROP_TRIGGER,
-                                 trigger_list_to_property(source_item_list1)))
+    if args.max is not None:
+        namespaces_items["items"] = namespaces_items["items"][: args.max]
+        logging.info(f"Using {len(namespaces_items['items'])} variables")
+    source_item_list1 = [
+        get_source_props(
+            root_path=args.root,
+            item_subpath=node["subpath"],
+            item_id=node["node_id"],
+            namespaces=namespaces_items["namespaces"],
+            namespace_int=namespaces_items["root_ns_index"],
+            client_item_root=CLIENT_DEFAULT_ROOT,
+        )
+        for node in namespaces_items["items"]
+    ]
+    with open(args.out, "w") as f:
+        f.write(
+            override_property_line(
+                args.flow,
+                args.node,
+                PROP_TRIGGER,
+                trigger_list_to_property(source_item_list1),
+            )
+        )

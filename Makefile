@@ -97,6 +97,7 @@ ACE_ARCHIVE_LIST=\
 	$(SCRIPTDIR)/ace_container_tools.rc.sh \
 	$(SCRIPTDIR)/prepare_ace_workdir.sh \
 	$(SCRIPTDIR)/server.conf.tmpl.yaml \
+	$(SCRIPTDIR)/generate_var_list_property.py \
 	$(PRIVATEDIR)/configuration.env \
 	$(PRIVATEDIR)/$(acmfg_tar) \
 	$(OUTDIR)/$(cert_pem) \
@@ -108,7 +109,7 @@ ACE_HOST_FOLDER=ace_files
 build_ace: $(OUTDIR)/$(ACE_ARCHIVE_FILE)
 # build a flat archive with files to transfer
 $(OUTDIR)/$(ACE_ARCHIVE_FILE): $(ACE_ARCHIVE_LIST)
-	chmod a+x $(SCRIPTDIR)/prepare_ace_workdir.sh
+	chmod a+x $(SCRIPTDIR)/prepare_ace_workdir.sh $(SCRIPTDIR)/generate_var_list_property.py
 	$(TAR) -c -v -z -f $@ --transform='s|.*/||' $(ACE_ARCHIVE_LIST)
 # send files to ace host
 deploy_ace: $(OUTDIR)/$(ACE_ARCHIVE_FILE)
