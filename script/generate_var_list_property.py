@@ -37,13 +37,17 @@ SOURCE_DEFAULT_ROOT = "/Source"
 CLIENT_DEFAULT_ROOT = "/Item"
 
 
-async def find_all(parent, excludes=None, result: list = None, parent_path: list = []):
+async def find_all(
+    parent, excludes=None, result: list = None, parent_path: list = [], max_items=None
+):
     """
     :return: list of items under specified parent node with format: {"subpath": "the/sub/path", "node_id": "ns=2; the node id"}
     """
     if result is None:
         result = []
     for node in await parent.get_children():
+        if result and max_items and len(result) >= max_items:
+            return result
         attrs = await node.read_attributes(
             [
                 ua.AttributeIds.BrowseName,
@@ -69,11 +73,11 @@ async def find_all(parent, excludes=None, result: list = None, parent_path: list
             result.append({"subpath": sub_path, "node_id": identifier})
         else:
             logging.debug(f"browsing {sub_path} : {identifier}")
-            await find_all(node, excludes, result, child_path)
+            await find_all(node, excludes, result, child_path, max_items)
     return result
 
 
-async def get_node_list_for_path(url, selection_filter, excludes):
+async def get_node_list_for_path(url, selection_filter, excludes, max_items=None):
     """
     :return: list of items under the specified path using format of find_all
     """
@@ -85,7 +89,9 @@ async def get_node_list_for_path(url, selection_filter, excludes):
         selected_root = await client.nodes.root.get_child(path_selection)
         namespaces = await client.get_namespace_array()
         logging.info(f"Root node found: {selected_root.nodeid.to_string()}")
-        all_items = await find_all(parent=selected_root, excludes=excludes)
+        all_items = await find_all(
+            parent=selected_root, excludes=excludes, max_items=max_items
+        )
         return {
             "namespaces": namespaces,
             "items": all_items,
@@ -207,12 +213,9 @@ if __name__ == "__main__":
         for filter in args.excludes:
             excludes.append(re.compile(filter))
     namespaces_items = asyncio.run(
-        get_node_list_for_path(args.url, args.root, excludes)
+        get_node_list_for_path(args.url, args.root, excludes, args.max)
     )
     logging.info(f"Found {len(namespaces_items['items'])} variables")
-    if args.max is not None:
-        namespaces_items["items"] = namespaces_items["items"][: args.max]
-        logging.info(f"Using {len(namespaces_items['items'])} variables")
     source_item_list1 = [
         get_source_props(
             root_path=args.root,
