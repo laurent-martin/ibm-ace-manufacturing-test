@@ -12,8 +12,10 @@ pip3 install --user asyncua
 
 uabrowse -u $opcua_server_url -l 0 -d 10 -p 'Objects,2:OpcPlc,2:Telemetry'
 
-./generate_var_list_property.py --flow OPCUA_process --node OPC-UA-Input --url $opcua_server_url --root 0:Objects/2:OpcPlc/2:Telemetry --out $ace_host_work_directory/ua_overrides.txt
+./generate_var_list_property.py scan --flow OPCUA_process --node OPC-UA-Input --url $opcua_server_url --root 0:Objects/2:OpcPlc/2:Telemetry --out $ace_host_work_directory/ua_overrides.txt
+
 --excludes '["Special/","ABCDEFGH"]'
+
 ibmint apply overrides $ace_container_work_directory/ua_overrides.txt --work-directory $ace_container_work_directory
 """
 
@@ -38,42 +40,59 @@ CLIENT_DEFAULT_ROOT = "/Item"
 
 
 async def find_all(
-    parent, excludes=None, result: list = None, parent_path: list = [], max_items=None
+    parent, parent_path: str = "", result: list = [], excludes=None, max_items=None
 ):
     """
+    Recursively find all variables under the specified parent node
+    :param parent: parent node
+    :param parent_path: parent path (or None for initial node)
+    :param result: list of items found
+    :param excludes: list of regular expressions to exclude
+    :param max_items: maximum number of items to return
     :return: list of items under specified parent node with format: {"subpath": "the/sub/path", "node_id": "ns=2; the node id"}
     """
-    if result is None:
-        result = []
-    for node in await parent.get_children():
+    logging.debug(f"browsing {len(result)} {parent_path}")
+    # browse children
+    for child_node in await parent.get_children():
+        # check if we have enough items
         if result and max_items and len(result) >= max_items:
             return result
-        attrs = await node.read_attributes(
+        # get child attributes
+        attrs = await child_node.read_attributes(
             [
                 ua.AttributeIds.BrowseName,
                 ua.AttributeIds.NodeId,
                 ua.AttributeIds.NodeClass,
             ]
         )
+        # extract attributes values
         browse_name, node_id, child_class = [attr.Value.Value for attr in attrs]
-        simple_name = browse_name.to_string().split(":")[-1]
-        child_path = parent_path + [simple_name]
-        sub_path = "/".join(child_path)
+        # simplification: since we navigate a single namespace, we can ignore namespace index
+        child_path = browse_name.to_string().split(":")[-1]
+        # prefix with parent path if provided
+        if parent_path:
+            child_path = f"{parent_path}/{child_path}"
         identifier = node_id.to_string()
-        to_exclude = False
-        for test_re in excludes:
-            if re.match(test_re, sub_path):
-                to_exclude = True
-                break
-        if to_exclude:
-            logging.debug(f"excluding {sub_path} : {identifier}")
-            continue
+        if excludes is not None:
+            to_exclude = False
+            for test_re in excludes:
+                if re.match(test_re, child_path):
+                    to_exclude = True
+                    break
+            if to_exclude:
+                logging.debug(f"excluding {child_path} : {identifier}")
+                continue
         if child_class == ua.NodeClass.Variable:
-            logging.debug(f"adding {sub_path} : {identifier}")
-            result.append({"subpath": sub_path, "node_id": identifier})
+            logging.debug(f"adding {len(result)} {child_path} : {identifier}")
+            result.append({"subpath": child_path, "node_id": identifier})
         else:
-            logging.debug(f"browsing {sub_path} : {identifier}")
-            await find_all(node, excludes, result, child_path, max_items)
+            await find_all(
+                parent=child_node,
+                parent_path=child_path,
+                result=result,
+                excludes=excludes,
+                max_items=max_items,
+            )
     return result
 
 
@@ -186,8 +205,42 @@ def override_property_line(
     return f"{flow_name}#{node_name}.{prop_name}={prop_value}\n"
 
 
-if __name__ == "__main__":
+def scan(out, flow, node, url, root, max, excludes):
+    excludes = []
+    if excludes is not None:
+        for filter in excludes:
+            excludes.append(re.compile(filter))
+    namespaces_items = asyncio.run(get_node_list_for_path(url, root, excludes, max))
+    logging.info(f"Found {len(namespaces_items['items'])} variables")
+    source_item_list1 = [
+        get_source_props(
+            root_path=root,
+            item_subpath=node["subpath"],
+            item_id=node["node_id"],
+            namespaces=namespaces_items["namespaces"],
+            namespace_int=namespaces_items["root_ns_index"],
+            client_item_root=CLIENT_DEFAULT_ROOT,
+        )
+        for node in namespaces_items["items"]
+    ]
+    with open(out, "w") as f:
+        f.write(
+            override_property_line(
+                flow,
+                node,
+                PROP_TRIGGER,
+                trigger_list_to_property(source_item_list1),
+            )
+        )
+
+
+def apply():
+    pass
+
+
+def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("operation", help="operation mode", choices=["scan", "apply"])
     parser.add_argument(
         "--debug",
         help="log level, debug=10, info=20, warning=30 (default)",
@@ -208,31 +261,13 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     logging.basicConfig(level=args.debug)
-    excludes = []
-    if args.excludes is not None:
-        for filter in args.excludes:
-            excludes.append(re.compile(filter))
-    namespaces_items = asyncio.run(
-        get_node_list_for_path(args.url, args.root, excludes, args.max)
-    )
-    logging.info(f"Found {len(namespaces_items['items'])} variables")
-    source_item_list1 = [
-        get_source_props(
-            root_path=args.root,
-            item_subpath=node["subpath"],
-            item_id=node["node_id"],
-            namespaces=namespaces_items["namespaces"],
-            namespace_int=namespaces_items["root_ns_index"],
-            client_item_root=CLIENT_DEFAULT_ROOT,
+    if args.operation == "scan":
+        scan(
+            args.out, args.flow, args.node, args.url, args.root, args.max, args.excludes
         )
-        for node in namespaces_items["items"]
-    ]
-    with open(args.out, "w") as f:
-        f.write(
-            override_property_line(
-                args.flow,
-                args.node,
-                PROP_TRIGGER,
-                trigger_list_to_property(source_item_list1),
-            )
-        )
+    elif args.operation == "apply":
+        apply()
+
+
+if __name__ == "__main__":
+    main()
