@@ -12,14 +12,35 @@ pip3 install --user asyncua
 
 uabrowse -u $opcua_server_url -l 0 -d 10 -p 'Objects,2:OpcPlc,2:Telemetry'
 
-./generate_var_list_property.py scan --flow OPCUA_process --node OPC-UA-Input --url $opcua_server_url --root 0:Objects/2:OpcPlc/2:Telemetry --out $ace_host_work_directory/ua_overrides.txt
+Generate overrides file for ACE application and then apply:
 
---excludes '["Special/","ABCDEFGH"]'
+./generate_var_list_property.py \
+    --url $opcua_server_url \
+    --root 0:Objects/2:OpcPlc/2:Telemetry \
+    --out $ace_host_work_directory/ua_overrides.txt \
+    --flow OPCUA_data_sub \
+    --node OPC-UA-Input
 
 ibmint apply overrides $ace_container_work_directory/ua_overrides.txt --work-directory $ace_container_work_directory
+
+Directly apply overrides to ACE application:
+
+sudo chmod -R a+rw $ace_host_work_directory
+sudo find $ace_host_work_directory -type d -print0|xargs -0 sudo chmod a+x
+
+./generate_var_list_property.py \
+    --url $opcua_server_url \
+    --root 0:Objects/2:OpcPlc/2:Telemetry \
+    --workdir $ace_host_work_directory \
+    --app OPCTestApp \
+    --flow OPCUA_data_sub \
+    --node OPC-UA-Input \
+    --excludes '["Special","ABCDEFGH","GUID","Anomaly"]'
+
 """
 
 import re
+import os
 import json
 import uuid
 import asyncio
@@ -51,7 +72,7 @@ async def find_all(
     :param max_items: maximum number of items to return
     :return: list of items under specified parent node with format: {"subpath": "the/sub/path", "node_id": "ns=2; the node id"}
     """
-    logging.debug(f"browsing {len(result)} {parent_path}")
+    logging.info(f"browsing {len(result)} {parent_path}")
     # browse children
     for child_node in await parent.get_children():
         # check if we have enough items
@@ -168,15 +189,15 @@ def get_source_props(
         client_item_root: root path of client item, e.g. '/Item'
     """
     item_subpath_array = item_subpath.split("/")
-    # last group in path
-    last_one = root_path.split("/")[-1].split(":")[1]
+    # last group in path : "Telemetry"
+    root_name = root_path.split("/")[-1].split(":")[1]
     # /Objects/2:OpcPlc/2:Telemetry/2:Fast/2:FastDouble1
     source_item_path = "/".join(
         [root_path] + [f"{namespace_int}:{item}" for item in item_subpath_array]
     )
     logging.debug(f"Source item path: {source_item_path}")
     # /Item/Telemetry/Fast/FastDouble1
-    mapping_path = "/".join([client_item_root, last_one] + item_subpath_array)
+    mapping_path = "/".join([client_item_root, root_name] + item_subpath_array)
     logging.debug(f"Item: {mapping_path} : {item_id}")
     return {
         "EVENT_LIST": False,
@@ -196,63 +217,36 @@ def get_source_props(
     }
 
 
-def override_property_line(
-    flow_name: str, node_name: str, prop_name: str, prop_value: str
-):
+def configurable_property_uri(flow_name: str, node_name: str, prop_name: str):
+    """
+    property name suitable for ibmint apply overrides
+    """
+    return f"{flow_name}#{node_name}.{prop_name}"
+
+
+def override_property_line(prop_uri: str, prop_value: str):
     """
     one line of override property file suitable for ibmint apply overrides
     """
-    return f"{flow_name}#{node_name}.{prop_name}={prop_value}\n"
-
-
-def scan(out, flow, node, url, root, max, excludes):
-    excludes = []
-    if excludes is not None:
-        for filter in excludes:
-            excludes.append(re.compile(filter))
-    namespaces_items = asyncio.run(get_node_list_for_path(url, root, excludes, max))
-    logging.info(f"Found {len(namespaces_items['items'])} variables")
-    source_item_list1 = [
-        get_source_props(
-            root_path=root,
-            item_subpath=node["subpath"],
-            item_id=node["node_id"],
-            namespaces=namespaces_items["namespaces"],
-            namespace_int=namespaces_items["root_ns_index"],
-            client_item_root=CLIENT_DEFAULT_ROOT,
-        )
-        for node in namespaces_items["items"]
-    ]
-    with open(out, "w") as f:
-        f.write(
-            override_property_line(
-                flow,
-                node,
-                PROP_TRIGGER,
-                trigger_list_to_property(source_item_list1),
-            )
-        )
-
-
-def apply():
-    pass
+    return f"{prop_uri}={prop_value}\n"
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("operation", help="operation mode", choices=["scan", "apply"])
     parser.add_argument(
         "--debug",
         help="log level, debug=10, info=20, warning=30 (default)",
         type=int,
-        default=30,
+        default=20,
     )
     parser.add_argument("--flow", help="flow name", type=str, required=True)
     parser.add_argument("--node", help="node name", type=str, required=True)
-    parser.add_argument("--out", help="output file name", type=str, required=True)
-    parser.add_argument("--max", help="max number of items", type=int)
     parser.add_argument("--url", help="OPC UA server URL", type=str, required=True)
     parser.add_argument("--root", help="root path", type=str, default=None)
+    parser.add_argument("--out", help="output file name", type=str, default=None)
+    parser.add_argument("--app", help="Application name", type=str, default=None)
+    parser.add_argument("--workdir", help="ACE workdir", type=str, default=None)
+    parser.add_argument("--max", help="max number of items", type=int)
     parser.add_argument(
         "--excludes",
         help="filter JSON with regex to exclude",
@@ -261,12 +255,70 @@ def main():
     )
     args = parser.parse_args()
     logging.basicConfig(level=args.debug)
-    if args.operation == "scan":
-        scan(
-            args.out, args.flow, args.node, args.url, args.root, args.max, args.excludes
+    excludes = []
+    if excludes is not None:
+        for filter in excludes:
+            excludes.append(re.compile(filter))
+    namespaces_items = asyncio.run(
+        get_node_list_for_path(args.url, args.root, excludes, args.max)
+    )
+    logging.info(f"Found {len(namespaces_items['items'])} variables")
+    source_item_list1 = [
+        get_source_props(
+            root_path=args.root,
+            item_subpath=node["subpath"],
+            item_id=node["node_id"],
+            namespaces=namespaces_items["namespaces"],
+            namespace_int=namespaces_items["root_ns_index"],
+            client_item_root=CLIENT_DEFAULT_ROOT,
         )
-    elif args.operation == "apply":
-        apply()
+        for node in namespaces_items["items"]
+    ]
+    property_value = trigger_list_to_property(source_item_list1)
+    property_uri = configurable_property_uri(args.flow, args.node, PROP_TRIGGER)
+    if args.out is not None:
+        override_line = override_property_line(property_uri, property_value)
+        if args.out == "-":
+            print(override_line)
+        else:
+            with open(args.out, "w") as f:
+                f.write(override_line)
+    else:
+        if args.app is None:
+            raise Exception(
+                "Application name (--app) is required when option --out is not set"
+            )
+        if args.workdir is None:
+            raise Exception(
+                "Workdir (--workdir) is required when option --out is not set"
+            )
+        props_files = f"{args.workdir}/run/{args.app}/META-INF/broker.xml"
+        # check if file exists
+        if not os.path.isfile(props_files):
+            raise Exception(f"File {props_files} does not exist")
+        logging.info(f"Found file {props_files}")
+        uri_prop = f'uri="{property_uri}"'
+        # read file
+        applied = False
+        new_props_files = props_files + ".new"
+        saved_props_files = props_files + ".original"
+        with open(new_props_files, "w") as new_file:
+            with open(props_files, "r") as f:
+                for line in f:
+                    if uri_prop in line:
+                        applied = True
+                        logging.info(f"Found property {property_uri}")
+                        match = re.search(r'^(.* override=")[^"]*(".*)$', line)
+                        if not match:
+                            raise Exception(f"Invalid line: {line}")
+                        line = match.group(1) + property_value + match.group(2) + "\n"
+                    new_file.write(line)
+        if not applied:
+            raise Exception(f"Property {property_uri} not found in {props_files}")
+        os.rename(props_files, saved_props_files)
+        logging.info(f"Saved original file {saved_props_files}")
+        os.rename(new_props_files, props_files)
+        logging.info(f"Saved new file {props_files}")
 
 
 if __name__ == "__main__":
