@@ -10,9 +10,11 @@ OUTDIR=generated
 SCRIPTDIR=script
 
 # GNU tar is needed
-# on mac: TAR=gtar make -e
+ifeq ($(shell tar --version|head -c3),bsd)
+TAR=gtar
+else
 TAR=tar
-
+endif
 # get config parameters
 include $(OUTDIR)/configuration.mak
 
