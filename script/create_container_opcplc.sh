@@ -2,11 +2,11 @@
 # https://github.com/Azure-Samples/iot-edge-opc-plc#command-line-reference
 # exit on any error (set -e)
 trap 'echo "ERROR: command failed";exit' ERR
-# load config
-source "$(dirname $0)"/configuration.env
-# folder where this script is located
+# folder where this script is located (end with /)
 host_main_folder=$(realpath $(dirname "$0"))/
-# (fixed value) path in the container image (WORKDIR)
+# load config
+source ${host_main_folder}configuration.env
+# (fixed value) path in the container image (WORKDIR) end with /
 container_app_folder=/app/
 # (fixed value) default value for options ap, tp, rp, ip
 container_pki_folder=${container_app_folder}pki

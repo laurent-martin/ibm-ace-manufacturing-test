@@ -1,4 +1,6 @@
 ---
+Defaults:
+  policyProject: 'ContainerDeployment'
 ResourceManagers:
   JVM:
     jvmDebugPort: $ace_port_debug
@@ -9,7 +11,5 @@ ConnectorProviders:
     connectorClassName: 'com.ibm.industrypack.industryclient.connector.ICConnectorFactory'
     property1: 'trustCertificate=true;allowEndpointMismatch=true;isHA=false'
 EnvironmentVariables:
-  ACMFG_MAPPING_FILES_DIR: '$acmfg_runtime_folder'
   USE_DATABASE: false
-Defaults:
-  policyProject: 'ContainerDeployment'
+#  ACMFG_MAPPING_FILES_DIR: '$acmfg_runtime_folder'
