@@ -26,53 +26,50 @@ CREATE COMPUTE MODULE OPCUA_XML_to_JSON
 		END IF;
 		-- loop on trigger items
 		WHILE I <= nb_items DO
-			-- create object before reference to it
+			-- create object so we can reference it
 			SET OutputRoot.JSON.Data.Item[I].topic = '';
-			DECLARE json_item REFERENCE TO OutputRoot.JSON.Data.Item[I];
 			IF is_trigger THEN
-				DECLARE current_item REFERENCE TO InputRoot.XMLNSC.tie:Triggers.tie:Trigger[I].tie:Item;
-				CALL AddJSONItem(current_item,json_item);
+				CALL AddJSONItem(OutputRoot.JSON.Data.Item[I],InputRoot.XMLNSC.tie:Triggers.tie:Trigger[I].tie:Item);
 			ELSE
-				DECLARE current_item REFERENCE TO InputRoot.XMLNSC.rie:Items.rie:Item[I];
-				CALL AddJSONItem(current_item,json_item);
+				CALL AddJSONItem(OutputRoot.JSON.Data.Item[I],InputRoot.XMLNSC.rie:Items.rie:Item[I]);
 			END IF;
 			SET I = I + 1;
 		END WHILE;
 		RETURN TRUE;
 	END;
-	CREATE PROCEDURE AddJSONItem(IN current_item REFERENCE, IN json_item REFERENCE)
+	CREATE PROCEDURE AddJSONItem(IN json_item REFERENCE, IN xml_item REFERENCE)
 	BEGIN
-		SET json_item.topic = current_item.cit:Source;
-		CASE current_item.cit:Value.civ:IIBType
+		SET json_item.topic = xml_item.cit:Source;
+		CASE xml_item.cit:Value.civ:IIBType
 		WHEN 'java.lang.String' THEN
 			SET json_item.type = 'string';
-			SET json_item.payload = current_item.cit:Value.civ:Data;
+			SET json_item.payload = xml_item.cit:Value.civ:Data;
 		WHEN 'java.lang.Long' THEN
 			SET json_item.type = 'number';
-			SET json_item.payload = CAST(current_item.cit:Value.civ:Data AS INTEGER);
+			SET json_item.payload = CAST(xml_item.cit:Value.civ:Data AS INTEGER);
 		WHEN 'java.lang.Integer' THEN
 			SET json_item.type = 'number';
-			SET json_item.payload = CAST(current_item.cit:Value.civ:Data AS INTEGER);
+			SET json_item.payload = CAST(xml_item.cit:Value.civ:Data AS INTEGER);
 		WHEN 'java.lang.Short' THEN
 			SET json_item.type = 'number';
-			SET json_item.payload = CAST(current_item.cit:Value.civ:Data AS INTEGER);
+			SET json_item.payload = CAST(xml_item.cit:Value.civ:Data AS INTEGER);
 		WHEN 'java.lang.Double' THEN
 			SET json_item.type = 'number';
-			SET json_item.payload = CAST(current_item.cit:Value.civ:Data AS FLOAT);
+			SET json_item.payload = CAST(xml_item.cit:Value.civ:Data AS FLOAT);
 		WHEN 'java.lang.Float' THEN
 			SET json_item.type = 'number';
-			SET json_item.payload = CAST(current_item.cit:Value.civ:Data AS FLOAT);
+			SET json_item.payload = CAST(xml_item.cit:Value.civ:Data AS FLOAT);
 		WHEN 'java.math.BigDecimal' THEN
 			SET json_item.type = 'number';
-			SET json_item.payload = CAST(current_item.cit:Value.civ:Data AS DECIMAL);
+			SET json_item.payload = CAST(xml_item.cit:Value.civ:Data AS DECIMAL);
 		WHEN 'java.lang.Boolean' THEN
 			SET json_item.type = 'boolean';
-			SET json_item.payload = CAST(current_item.cit:Value.civ:Data AS BOOLEAN);
+			SET json_item.payload = CAST(xml_item.cit:Value.civ:Data AS BOOLEAN);
 		ELSE
-			SET json_item.type = 'Unknown Type: '||current_item.cit:Value.civ:IIBType;
+			SET json_item.type = 'Unknown Type: '||xml_item.cit:Value.civ:IIBType;
 		END CASE;
-		SET json_item.sourceTimestamp = current_item.cit:Value.civ:SourceTime;
-		SET json_item.serverTimestamp = current_item.cit:Value.civ:ServerTime;
+		SET json_item.sourceTimestamp = xml_item.cit:Value.civ:SourceTime;
+		SET json_item.serverTimestamp = xml_item.cit:Value.civ:ServerTime;
 	END;
 	CREATE PROCEDURE CopyMessageHeaders() BEGIN
 		DECLARE I INTEGER 1;
