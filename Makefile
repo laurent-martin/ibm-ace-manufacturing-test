@@ -40,7 +40,7 @@ init: $(PRIVATEDIR)/configuration.env
 template:
 	sed -Ee 's/(_key|_address)=.*/\1=_your_value_here_/' < $(PRIVATEDIR)/configuration.env > $(SCRIPTDIR)/configuration.tmpl.env
 
-clean::
+superclean: clean
 	rm -fr $(OUTDIR)
 
 
@@ -91,7 +91,8 @@ deploy_opcplc: $(OUTDIR)/$(OPC_ARCHIVE_FILE)
 	ssh $(opcua_server_address) 'rm -fr $(OPC_HOST_FOLDER) && mkdir -p $(OPC_HOST_FOLDER) && tar --directory=$(OPC_HOST_FOLDER) -x -v -z -f $(OPC_ARCHIVE_FILE) && rm -f $(OPC_ARCHIVE_FILE)'
 ssh_opcplc:
 	ssh $(opcua_server_address)
-
+clean::
+	rm -f $(OUTDIR)/$(OPC_ARCHIVE_FILE)
 ###################################
 # ACE
 
@@ -119,7 +120,8 @@ deploy_ace: $(OUTDIR)/$(ACE_ARCHIVE_FILE)
 	ssh $(ace_server_address) "rm -fr $(ACE_HOST_FOLDER) && mkdir -p $(ACE_HOST_FOLDER) && tar --directory=$(ACE_HOST_FOLDER) -x -v -z -f $(ACE_ARCHIVE_FILE) && rm -f $(ACE_ARCHIVE_FILE)"
 ssh_ace:
 	ssh $(ace_server_address)
-
+clean::
+	rm -f $(OUTDIR)/$(ACE_ARCHIVE_FILE)
 ###################################
 # Mosquitto
 MQTT_ARCHIVE_LIST=\
@@ -136,3 +138,5 @@ $(OUTDIR)/$(MQTT_ARCHIVE_FILE): $(MQTT_ARCHIVE_LIST)
 deploy_mqtt: $(OUTDIR)/$(MQTT_ARCHIVE_FILE)
 	scp $(OUTDIR)/$(MQTT_ARCHIVE_FILE) $(mosquitto_server_address):
 	ssh $(mosquitto_server_address) "rm -fr $(MQTT_HOST_FOLDER) && mkdir -p $(MQTT_HOST_FOLDER) && tar --directory=$(MQTT_HOST_FOLDER) -x -v -z -f $(MQTT_ARCHIVE_FILE) && rm -f $(MQTT_ARCHIVE_FILE)"
+clean::
+	rm -f $(OUTDIR)/$(MQTT_ARCHIVE_FILE)

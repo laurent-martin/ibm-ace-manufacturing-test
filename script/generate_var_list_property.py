@@ -17,7 +17,7 @@ Generate overrides file for ACE application and then apply:
 ./generate_var_list_property.py \
     --url $opcua_server_url \
     --root 0:Objects/2:OpcPlc/2:Telemetry \
-    --out $ace_host_work_directory/ua_overrides.txt \
+    --to $ace_host_work_directory/ua_overrides.txt \
     --flow OPCUA_data_sub \
     --node OPC-UA-Input
 
@@ -29,14 +29,27 @@ sudo chmod -R a+rw $ace_host_work_directory
 sudo find $ace_host_work_directory -type d -print0|xargs -0 sudo chmod a+x
 
 ./generate_var_list_property.py \
+    --workdir $ace_host_work_directory \
     --url $opcua_server_url \
     --root 0:Objects/2:OpcPlc/2:Telemetry \
-    --workdir $ace_host_work_directory \
-    --app OPCTestApp \
+    --to OPCTestApp \
     --flow OPCUA_data_sub \
     --node OPC-UA-Input \
-    --excludes '["Special","ABCDEFGH","GUID","Anomaly"]'
+    --excludes '["Special","ABCDEFGH","GUID","Anomaly"]' \
+    --max 100
 
+./generate_var_list_property.py \
+    --workdir $ace_host_work_directory \
+    --url $opcua_server_url \
+    --root 0:Objects/2:OpcPlc/2:Telemetry \
+    --to OPCTestApp \
+    --flow OPCUA_data_read \
+    --node OPC-UA-Read \
+    --type read \
+    --excludes '["Special","ABCDEFGH","GUID","Anomaly"]' \
+    --max 100
+
+    
 """
 
 import re
@@ -50,8 +63,10 @@ import urllib.parse
 from asyncua import Client, ua
 
 # properties in message flow XML
-PROP_TRIGGER = "triggerItemList"
 PROP_SERVER = "opcUaServerList"
+PROP_TRIGGER_ITEMS = "triggerItemList"
+PROP_CLIENT_ITEMS = "clientItemList"
+
 # default source uuid
 SOURCE_ROOT_UUID = "00000000-0000-1000-8000-000000000002"
 # Default source path
@@ -160,11 +175,17 @@ def item_to_uri_params(info: dict):
     )
 
 
-def trigger_list_to_property(item_list):
+def item_list_to_property(item_list: list, prop_name: str):
     """
     Convert list of items in dict to property value string suitable for triggerItemList
     """
-    src_list = ["4"]
+    src_list = []
+    if prop_name == PROP_TRIGGER_ITEMS:
+        src_list.append("4")
+    elif prop_name == PROP_CLIENT_ITEMS:
+        src_list.append("3")
+    else:
+        raise ValueError(f"Unknown property name {prop_name}")
     for item in item_list:
         src_list.append(item_to_uri_params(item))
     return ",".join(src_list)
@@ -177,6 +198,7 @@ def get_source_props(
     namespaces: list,
     namespace_int: int,
     client_item_root: str,
+    prop_name: str,
 ):
     """
     :return: dict of source properties for one item
@@ -199,7 +221,7 @@ def get_source_props(
     # /Item/Telemetry/Fast/FastDouble1
     mapping_path = "/".join([client_item_root, root_name] + item_subpath_array)
     logging.debug(f"Item: {mapping_path} : {item_id}")
-    return {
+    result = {
         "EVENT_LIST": False,
         "HAS_HISTORY": False,
         "HOLDS_VALUE": True,
@@ -215,6 +237,9 @@ def get_source_props(
         "SOURCE_REF": SOURCE_ROOT_UUID,
         "VERSION_TIME": "2023-06-09T07:29:29.380+0000",
     }
+    if prop_name == PROP_CLIENT_ITEMS:
+        result["INDEX_RANGE"] = ""
+    return result
 
 
 def configurable_property_uri(flow_name: str, node_name: str, prop_name: str):
@@ -233,25 +258,37 @@ def override_property_line(prop_uri: str, prop_value: str):
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--url", help="OPC UA server URL", type=str, required=True)
+    parser.add_argument("--root", help="Root path", type=str, default=None)
     parser.add_argument(
-        "--debug",
-        help="log level, debug=10, info=20, warning=30 (default)",
-        type=int,
-        default=20,
+        "--to",
+        help="Output file name or Application name (with workdir)",
+        type=str,
+        required=True,
     )
     parser.add_argument("--flow", help="flow name", type=str, required=True)
     parser.add_argument("--node", help="node name", type=str, required=True)
-    parser.add_argument("--url", help="OPC UA server URL", type=str, required=True)
-    parser.add_argument("--root", help="root path", type=str, default=None)
-    parser.add_argument("--out", help="output file name", type=str, default=None)
-    parser.add_argument("--app", help="Application name", type=str, default=None)
-    parser.add_argument("--workdir", help="ACE workdir", type=str, default=None)
+    parser.add_argument(
+        "--workdir",
+        help="ACE workdir, set to save directly in application",
+        type=str,
+        default=None,
+    )
     parser.add_argument("--max", help="max number of items", type=int)
+    parser.add_argument(
+        "--type", help="type of items", type=str, choices=["sub", "read"], default="sub"
+    )
     parser.add_argument(
         "--excludes",
         help="filter JSON with regex to exclude",
         type=json.loads,
         default=None,
+    )
+    parser.add_argument(
+        "--debug",
+        help="log level, debug=10, info=20, warning=30 (default)",
+        type=int,
+        default=20,
     )
     args = parser.parse_args()
     logging.basicConfig(level=args.debug)
@@ -263,7 +300,11 @@ def main():
         get_node_list_for_path(args.url, args.root, excludes, args.max)
     )
     logging.info(f"Found {len(namespaces_items['items'])} variables")
-    source_item_list1 = [
+    # property name depends on type of operation
+    property_name = PROP_TRIGGER_ITEMS
+    if args.type == "read":
+        property_name = PROP_CLIENT_ITEMS
+    source_item_list = [
         get_source_props(
             root_path=args.root,
             item_subpath=node["subpath"],
@@ -271,28 +312,23 @@ def main():
             namespaces=namespaces_items["namespaces"],
             namespace_int=namespaces_items["root_ns_index"],
             client_item_root=CLIENT_DEFAULT_ROOT,
+            prop_name=property_name,
         )
         for node in namespaces_items["items"]
     ]
-    property_value = trigger_list_to_property(source_item_list1)
-    property_uri = configurable_property_uri(args.flow, args.node, PROP_TRIGGER)
-    if args.out is not None:
+    property_value = item_list_to_property(source_item_list, property_name)
+    property_uri = configurable_property_uri(args.flow, args.node, property_name)
+    # if workdir is not set, send to file or stdout
+    if args.workdir is None:
         override_line = override_property_line(property_uri, property_value)
-        if args.out == "-":
+        if args.to == "-":
             print(override_line)
         else:
-            with open(args.out, "w") as f:
+            with open(args.to, "w") as f:
                 f.write(override_line)
     else:
-        if args.app is None:
-            raise Exception(
-                "Application name (--app) is required when option --out is not set"
-            )
-        if args.workdir is None:
-            raise Exception(
-                "Workdir (--workdir) is required when option --out is not set"
-            )
-        props_files = f"{args.workdir}/run/{args.app}/META-INF/broker.xml"
+        # workdir is set, save directly in application
+        props_files = f"{args.workdir}/run/{args.to}/META-INF/broker.xml"
         # check if file exists
         if not os.path.isfile(props_files):
             raise Exception(f"File {props_files} does not exist")
