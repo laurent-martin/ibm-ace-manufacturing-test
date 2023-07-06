@@ -23,7 +23,9 @@ Generate overrides file for ACE application and then apply:
 
 ibmint apply overrides $ace_container_work_directory/ua_overrides.txt --work-directory $ace_container_work_directory
 
-Directly apply overrides to ACE application:
+Directly apply overrides to ACE application (add option --workdir):
+
+First we need write access , and python on the host
 
 sudo chmod -R a+rw $ace_host_work_directory
 sudo find $ace_host_work_directory -type d -print0|xargs -0 sudo chmod a+x
@@ -49,7 +51,7 @@ sudo find $ace_host_work_directory -type d -print0|xargs -0 sudo chmod a+x
     --excludes '["Special","ABCDEFGH","GUID","Anomaly"]' \
     --max 100
 
-    
+
 """
 
 import re
