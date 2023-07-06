@@ -15,40 +15,39 @@ uabrowse -u $opcua_server_url -l 0 -d 10 -p 'Objects,2:OpcPlc,2:Telemetry'
 Generate overrides file for ACE application and then apply:
 
 ./generate_var_list_property.py \
+    --to $ace_host_work_directory/ua_overrides.txt \
     --url $opcua_server_url \
     --root 0:Objects/2:OpcPlc/2:Telemetry \
-    --to $ace_host_work_directory/ua_overrides.txt \
     --flow OPCUA_data_sub \
     --node OPC-UA-Input
 
-ibmint apply overrides $ace_container_work_directory/ua_overrides.txt --work-directory $ace_container_work_directory
+time ibmint apply overrides $ace_container_work_directory/ua_overrides.txt --work-directory $ace_container_work_directory
 
 Directly apply overrides to ACE application (add option --workdir):
 
 First we need write access , and python on the host
 
-sudo chmod -R a+rw $ace_host_work_directory
-sudo find $ace_host_work_directory -type d -print0|xargs -0 sudo chmod a+x
+sudo chmod -R o=u $ace_host_work_directory
 
 ./generate_var_list_property.py \
+    --to OPCTestApp \
     --workdir $ace_host_work_directory \
     --url $opcua_server_url \
     --root 0:Objects/2:OpcPlc/2:Telemetry \
-    --to OPCTestApp \
     --flow OPCUA_data_sub \
     --node OPC-UA-Input \
-    --excludes '["Special","ABCDEFGH","GUID","Anomaly"]' \
+    --excludes '["Anomaly","GUID","Special"]' \
     --max 100
 
 ./generate_var_list_property.py \
+    --to OPCTestApp \
     --workdir $ace_host_work_directory \
     --url $opcua_server_url \
     --root 0:Objects/2:OpcPlc/2:Telemetry \
-    --to OPCTestApp \
     --flow OPCUA_data_read \
     --node OPC-UA-Read \
     --type read \
-    --excludes '["Special","ABCDEFGH","GUID","Anomaly"]' \
+    --excludes '["Anomaly","GUID","Special"]' \
     --max 100
 
 
@@ -257,6 +256,37 @@ def override_property_line(prop_uri: str, prop_value: str):
     return f"{prop_uri}={prop_value}\n"
 
 
+def update_xml_file(
+    properties_file: str, match_part: str, change_part: str, property_value: str
+):
+    """
+    Update broker xml file
+    """
+    applied = False
+    new_props_files = properties_file + ".new"
+    saved_props_files = properties_file + ".original"
+    with open(new_props_files, "w") as new_file:
+        with open(properties_file, "r") as orig_file:
+            logging.info(f"Found file {properties_file}")
+            for line in orig_file:
+                if match_part in line:
+                    if applied:
+                        raise Exception(f"Property {match_part} already applied")
+                    applied = True
+                    logging.info(f"Found property {match_part}")
+                    match = re.search(rf'^(.* {change_part}=")[^"]*(".*)$', line)
+                    if not match:
+                        raise Exception(f"Invalid line: {line}")
+                    line = match.group(1) + property_value + match.group(2) + "\n"
+                new_file.write(line)
+    if not applied:
+        raise Exception(f"Property {match_part} not found in {properties_file}")
+    os.rename(properties_file, saved_props_files)
+    logging.info(f"Saved original file {saved_props_files}")
+    os.rename(new_props_files, properties_file)
+    logging.info(f"Updated file {properties_file}")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--url", help="OPC UA server URL", type=str, required=True)
@@ -305,6 +335,7 @@ def main():
     property_name = PROP_TRIGGER_ITEMS
     if args.type == "read":
         property_name = PROP_CLIENT_ITEMS
+    logging.info(f"Property {property_name}")
     source_item_list = [
         get_source_props(
             root_path=args.root,
@@ -327,35 +358,21 @@ def main():
         else:
             with open(args.to, "w") as f:
                 f.write(override_line)
+            logging.info(f"Created {args.to}")
     else:
         # workdir is set, save directly in application
-        props_files = f"{args.workdir}/run/{args.to}/META-INF/broker.xml"
-        # check if file exists
-        if not os.path.isfile(props_files):
-            raise Exception(f"File {props_files} does not exist")
-        logging.info(f"Found file {props_files}")
-        uri_prop = f'uri="{property_uri}"'
-        # read file
-        applied = False
-        new_props_files = props_files + ".new"
-        saved_props_files = props_files + ".original"
-        with open(new_props_files, "w") as new_file:
-            with open(props_files, "r") as f:
-                for line in f:
-                    if uri_prop in line:
-                        applied = True
-                        logging.info(f"Found property {property_uri}")
-                        match = re.search(r'^(.* override=")[^"]*(".*)$', line)
-                        if not match:
-                            raise Exception(f"Invalid line: {line}")
-                        line = match.group(1) + property_value + match.group(2) + "\n"
-                    new_file.write(line)
-        if not applied:
-            raise Exception(f"Property {property_uri} not found in {props_files}")
-        os.rename(props_files, saved_props_files)
-        logging.info(f"Saved original file {saved_props_files}")
-        os.rename(new_props_files, props_files)
-        logging.info(f"Saved new file {props_files}")
+        update_xml_file(
+            f"{args.workdir}/run/{args.to}/META-INF/broker.xml",
+            f'uri="{property_uri}"',
+            "override",
+            property_value,
+        )
+        update_xml_file(
+            f"{args.workdir}/run/{args.to}/{args.flow}.msgflow",
+            property_name,
+            property_name,
+            property_value,
+        )
 
 
 if __name__ == "__main__":
