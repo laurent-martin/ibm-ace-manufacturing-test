@@ -65,9 +65,14 @@ import urllib.parse
 from asyncua import Client, ua
 
 # properties in message flow XML
-PROP_SERVER = "opcUaServerList"
-PROP_TRIGGER_ITEMS = "triggerItemList"
 PROP_CLIENT_ITEMS = "clientItemList"
+PROP_TRIGGER_ITEMS = "triggerItemList"
+PROP_SERVER = "opcUaServerList"
+
+PROP_TO_NUM = {
+    PROP_CLIENT_ITEMS: 3,
+    PROP_TRIGGER_ITEMS: 4,
+}
 
 # default source uuid
 SOURCE_ROOT_UUID = "00000000-0000-1000-8000-000000000002"
@@ -181,13 +186,8 @@ def item_list_to_property(item_list: list, prop_name: str):
     """
     Convert list of items in dict to property value string suitable for triggerItemList
     """
-    src_list = []
-    if prop_name == PROP_TRIGGER_ITEMS:
-        src_list.append("4")
-    elif prop_name == PROP_CLIENT_ITEMS:
-        src_list.append("3")
-    else:
-        raise ValueError(f"Unknown property name {prop_name}")
+    # first item is property identifier ? (number)
+    src_list = [str(PROP_TO_NUM[prop_name])]
     for item in item_list:
         src_list.append(item_to_uri_params(item))
     return ",".join(src_list)
@@ -246,7 +246,7 @@ def get_source_props(
 
 def configurable_property_uri(flow_name: str, node_name: str, prop_name: str):
     """
-    property name suitable for ibmint apply overrides
+    property URI (for ibmint apply overrides and xml properties)
     """
     return f"{flow_name}#{node_name}.{prop_name}"
 
