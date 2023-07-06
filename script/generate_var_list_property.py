@@ -167,29 +167,28 @@ def item_to_uri_params(info: dict):
     Args:
         info: one source or server information
     """
-    suffix = ""
-    if "SOURCE_ITEM_ADDR" in info:
-        suffix = "|||"
-    encoded_pairs = []
+    encoded_key_value_list = []
     for key, value in info.items():
         if isinstance(value, str):
             value = urllib.parse.quote(str(value), safe=":/;#[] *")
         else:
             value = str(value).lower()
-        encoded_pairs.append(f"{key}={value}")
-    return (
-        f"{info['MAPPING_ID']}:{info['MAPPING_PATH']}?{'$'.join(encoded_pairs)}{suffix}"
-    )
+        encoded_key_value_list.append(f"{key}={value}")
+    return f"{info['MAPPING_ID']}:{info['MAPPING_PATH']}?{'$'.join(encoded_key_value_list)}"
 
 
 def item_list_to_property(item_list: list, prop_name: str):
     """
     Convert list of items in dict to property value string suitable for triggerItemList
     """
+    suffix = ""
+    if prop_name == PROP_TRIGGER_ITEMS:
+        suffix = "|||"
     # first item is property identifier ? (number)
     src_list = [str(PROP_TO_NUM[prop_name])]
     for item in item_list:
-        src_list.append(item_to_uri_params(item))
+        item_uri = item_to_uri_params(item)
+        src_list.append(item_uri + suffix)
     return ",".join(src_list)
 
 
@@ -239,7 +238,7 @@ def get_source_props(
         "SOURCE_REF": SOURCE_ROOT_UUID,
         "VERSION_TIME": "2023-06-09T07:29:29.380+0000",
     }
-    if prop_name == PROP_CLIENT_ITEMS:
+    if False and prop_name == PROP_CLIENT_ITEMS:
         result["INDEX_RANGE"] = ""
     return result
 
